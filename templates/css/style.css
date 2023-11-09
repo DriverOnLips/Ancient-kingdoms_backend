@@ -1,0 +1,49 @@
+#root {
+    display: flex;
+}
+
+service-main {
+    font-size: 40px;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.kingdom-description {
+    text-align: left;
+    padding-right: 10px;
+}
+
+.btn-kingdom-change-status {
+    font-size: 25px;
+    width: 249px; 
+    padding: 0px 10px 0px 10px; 
+    height: 64px;
+    flex-shrink: 0;
+    border-radius: 20px;
+    background: #358CDC;
+    color: black; 
+    text-decoration: none;
+}
+
+.btn-main-detail {
+    font-size: 25px;
+    width: 249px; 
+    padding: 0px 10px 0px 10px; 
+    height: 64px;
+    flex-shrink: 0;
+    border-radius: 20px;
+    background: #358CDC;
+    color: black; 
+    text-decoration: none;
+}
+
+.hom-button {
+    font-size: 35px; 
+    width: 249px; 
+    padding: 0px 10px 0px 10px; 
+    height: 64px;
+    flex-shrink: 0;
+    border-radius: 20px;
+    background: #358CDC;
+    color: black; 
+    text-decoration: none;
+}

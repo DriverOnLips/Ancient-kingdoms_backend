@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru-ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Топ Древнерусских княжеств</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <header style="text-align: center; font-size: 40px; margin-bottom: 30px; font-family: Arial, Helvetica, sans-serif;">
+        Топ 6 княжеств Древних Руссов
+    </header>
+    <div id="root" style="display: block;">
+        <div style="text-align: center;">
+            <form method="GET" name="search" style="text-align: center;">
+                <label for="kingdom_name" style="font-size: 30px;">Введите название:</label>
+                <input type="text" id="kingdom_name" name="kingdom_name" style="font-size: 30px;" value="{{ .searchText }}">
+                <input type="submit" class="button" value="Поиск" style="cursor: pointer !important; font-size: 30px;">
+            </form>
+        </div>
+        <div class="services-main" style="display: flex; flex-wrap: wrap;">
+            {{ range .kingdoms }}
+                <div style="margin: 10px 10px 10px 10px; border: 2px solid black; border-radius: 2%;">
+                    <div style="text-align: center;">
+                        <h1>{{ .Name }}</h1>
+                    </div>
+                    <img class="card_image" style="width: 360px; height: 360px; object-fit: fill; text-align: center;" src="data:image/jpg;base64, {{ .Image }}" alt="картинка"><br>
+                    <div style="text-align: right;">
+                        <a class="button" data-name="{{ .Name }}" href="{{ .Name }}" style="font-size: 25px; width: 249px; 
+                        padding: 0px 10px 0px 10px; height: 64px;flex-shrink: 0;border-radius: 20px;background: #358CDC;
+                        color: black; text-decoration: none;">
+                            Подробнее
+                        </a>
+                    </div>
+                </div>
+            {{ end }}
+        </div>
+    </div>
+</body>
+</html>
