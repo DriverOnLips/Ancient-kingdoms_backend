@@ -5,22 +5,23 @@ import (
 	"net/http"
 	"strconv"
 
-	"kingdoms/internal/app/connect"
-	"kingdoms/internal/app/database"
-	"kingdoms/internal/app/repository"
+	"kingdoms/internal/database/connect"
+	requests "kingdoms/internal/database/requestModel"
+	"kingdoms/internal/database/schema"
+	"kingdoms/internal/server/processing"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Application struct {
-	repo repository.Repository
+	repo processing.Repository
 	r    *gin.Engine
 }
 
 func New() Application {
 	app := Application{}
 
-	repo, _ := repository.New(connect.FromEnv())
+	repo, _ := processing.New(connect.FromEnv())
 
 	app.repo = *repo
 
@@ -32,10 +33,6 @@ func (a *Application) StartServer() {
 	log.Println("Server started")
 
 	a.r = gin.Default()
-
-	a.r.LoadHTMLGlob("../../templates/*.html")
-	a.r.Static("/css", "../../templates/css")
-	a.r.Static("/js", "../../templates/js")
 
 	a.r.GET("kingdoms", a.getKingdoms)
 	a.r.GET("kingdom", a.getKingdom)
@@ -75,7 +72,7 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 	ruler := ctx.Query("ruler")
 	state := ctx.Query("state")
 
-	requestBody := database.GetKingdomsRequest{
+	requestBody := requests.GetKingdomsRequest{
 		Ruler: ruler,
 		State: state,
 	}
@@ -91,6 +88,8 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 		return
 	}
 
+	// kingdoms[0].Image = "http://localhost:8000/internal/database/store/img/kingdoms/Chernigov.png"
+
 	response := Response{
 		Status:  "ok",
 		Message: "kingdoms found",
@@ -100,7 +99,7 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 }
 
 func (a *Application) getKingdom(ctx *gin.Context) {
-	var kingdom database.Kingdom
+	var kingdom schema.Kingdom
 	if err := ctx.BindJSON(&kingdom); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
 		return
@@ -111,7 +110,7 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, "error getting kingdom:"+err.Error())
 		return
 	}
-	if necessaryKingdom == (database.Kingdom{}) {
+	if necessaryKingdom == (schema.Kingdom{}) {
 		ctx.String(http.StatusNotFound, "no necessary kingdom")
 		return
 	}
@@ -120,7 +119,7 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) getRulers(ctx *gin.Context) {
-	var requestBody database.GetRulersRequest
+	var requestBody requests.GetRulersRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -136,7 +135,7 @@ func (a *Application) getRulers(ctx *gin.Context) {
 }
 
 func (a *Application) getRuler(ctx *gin.Context) {
-	var ruler database.Ruler
+	var ruler schema.Ruler
 	if err := ctx.BindJSON(&ruler); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
 		return
@@ -147,7 +146,7 @@ func (a *Application) getRuler(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, "error getting ruler:"+err.Error())
 		return
 	}
-	if necessaryRuler == (database.Ruler{}) {
+	if necessaryRuler == (schema.Ruler{}) {
 		ctx.String(http.StatusNotFound, "no necessary ruler")
 		return
 	}
@@ -156,7 +155,7 @@ func (a *Application) getRuler(ctx *gin.Context) {
 }
 
 func (a *Application) addKingdom(ctx *gin.Context) {
-	var kingdom database.Kingdom
+	var kingdom schema.Kingdom
 	if err := ctx.BindJSON(&kingdom); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
 		return
@@ -172,7 +171,7 @@ func (a *Application) addKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) editKingdom(ctx *gin.Context) {
-	var kingdom database.Kingdom
+	var kingdom schema.Kingdom
 	if err := ctx.BindJSON(&kingdom); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing ruler")
 		return
@@ -188,7 +187,7 @@ func (a *Application) editKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
-	var requestBody database.CreateRulerForKingdomRequest
+	var requestBody requests.CreateRulerForKingdomRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
 		return
@@ -204,7 +203,7 @@ func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) editRuler(ctx *gin.Context) {
-	var ruler database.Ruler
+	var ruler schema.Ruler
 	if err := ctx.BindJSON(&ruler); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
 		return
@@ -220,7 +219,7 @@ func (a *Application) editRuler(ctx *gin.Context) {
 }
 
 func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
-	var requestBody database.RulerStateChangeRequest
+	var requestBody requests.RulerStateChangeRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -246,7 +245,7 @@ func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
 }
 
 func (a *Application) rulerStateChangeUser(ctx *gin.Context) {
-	var requestBody database.RulerStateChangeRequest
+	var requestBody requests.RulerStateChangeRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
