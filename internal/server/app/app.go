@@ -69,12 +69,14 @@ type Response struct {
 }
 
 func (a *Application) getKingdoms(ctx *gin.Context) {
-	ruler := ctx.Query("ruler")
+	name := ctx.Query("kingdomName")
+	ruler := ctx.Query("rulerName")
 	state := ctx.Query("state")
 
 	requestBody := requests.GetKingdomsRequest{
-		Ruler: ruler,
-		State: state,
+		KingdomName: name,
+		RulerName:   ruler,
+		State:       state,
 	}
 
 	kingdoms, err := a.repo.GetKingdoms(requestBody)
@@ -84,38 +86,55 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 			Message: "error getting necessary kingdoms: " + err.Error(),
 			Body:    nil,
 		}
+
 		ctx.JSON(http.StatusInternalServerError, response)
+
 		return
 	}
-
-	// kingdoms[0].Image = "http://localhost:8000/internal/database/store/img/kingdoms/Chernigov.png"
 
 	response := Response{
 		Status:  "ok",
 		Message: "kingdoms found",
 		Body:    kingdoms,
 	}
+
 	ctx.JSON(http.StatusOK, response)
 }
 
 func (a *Application) getKingdom(ctx *gin.Context) {
 	var kingdom schema.Kingdom
-	if err := ctx.BindJSON(&kingdom); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
-		return
-	}
+	kingdomID, err := strconv.Atoi(ctx.Query("id"))
 
-	necessaryKingdom, err := a.repo.GetKingdom(kingdom)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error getting kingdom:"+err.Error())
-		return
-	}
-	if necessaryKingdom == (schema.Kingdom{}) {
-		ctx.String(http.StatusNotFound, "no necessary kingdom")
+		response := Response{
+			Status:  "error",
+			Message: "error getting kingdom ID: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.JSON(http.StatusFound, necessaryKingdom)
+	kingdom.Id = uint(kingdomID)
+
+	kingdom, err = a.repo.GetKingdom(kingdom)
+	if err != nil {
+		response := Response{
+			Status:  "error",
+			Message: "error getting necessary kingdom: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response := Response{
+		Status:  "ok",
+		Message: "kingdom found",
+		Body:    kingdom,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (a *Application) getRulers(ctx *gin.Context) {

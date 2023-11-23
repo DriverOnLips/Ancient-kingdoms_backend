@@ -2,7 +2,6 @@ package processing
 
 import (
 	"errors"
-	"fmt"
 	requests "kingdoms/internal/database/requestModel"
 	schema "kingdoms/internal/database/schema"
 
@@ -31,16 +30,21 @@ func (r *Repository) GetKingdoms(requestBody requests.GetKingdomsRequest) ([]sch
 	var tx *gorm.DB = r.db
 
 	switch {
-	case requestBody.Ruler == "All" && requestBody.State != "":
+	case requestBody.KingdomName == "" && requestBody.RulerName == "All" && requestBody.State != "": // TODO
 		err := tx.Where("state = ?", requestBody.State).Find(&kingdomsToReturn).Error
 		if err != nil {
 			return []schema.Kingdom{}, err
 		}
 
-	case requestBody.Ruler != "All" && requestBody.State == "":
+	case requestBody.KingdomName != "" && requestBody.RulerName == "All" && requestBody.State != "": // TODO
+		err := tx.Where("state = ?", requestBody.State).Find(&kingdomsToReturn).Error
+		if err != nil {
+			return []schema.Kingdom{}, err
+		}
+
+	case requestBody.KingdomName == "" && requestBody.RulerName != "All" && requestBody.State == "": // TODO
 		var ruler schema.Ruler
-		err := tx.Where("name LIKE " + "'%" + requestBody.Ruler + "%'").First(&ruler).Error
-		fmt.Println(ruler)
+		err := tx.Where("name LIKE " + "'%" + requestBody.RulerName + "%'").First(&ruler).Error
 		if err != nil {
 			return []schema.Kingdom{}, err
 		}
@@ -55,9 +59,27 @@ func (r *Repository) GetKingdoms(requestBody requests.GetKingdomsRequest) ([]sch
 			return []schema.Kingdom{}, err
 		}
 
-	case requestBody.Ruler != "All" && requestBody.State != "":
+	case requestBody.KingdomName != "" && requestBody.RulerName != "All" && requestBody.State == "": // TODO
 		var ruler schema.Ruler
-		err := tx.Where("name = ?", requestBody.Ruler).First(&ruler).Error
+		err := tx.Where("name LIKE " + "'%" + requestBody.RulerName + "%'").First(&ruler).Error
+
+		if err != nil {
+			return []schema.Kingdom{}, err
+		}
+		if ruler == (schema.Ruler{}) {
+			return []schema.Kingdom{}, errors.New("no necessary ruler")
+		}
+
+		err = tx.Joins("JOIN rulings ON rulings.kingdom_refer = kingdoms.id").
+			Where("ruling.ruler_refer = ?", ruler.Id).
+			Find(&kingdomsToReturn).Error
+		if err != nil {
+			return []schema.Kingdom{}, err
+		}
+
+	case requestBody.KingdomName == "" && requestBody.RulerName != "All" && requestBody.State != "": // TODO
+		var ruler schema.Ruler
+		err := tx.Where("name = ?", requestBody.RulerName).First(&ruler).Error
 		if err != nil {
 			return []schema.Kingdom{}, err
 		}
@@ -69,6 +91,30 @@ func (r *Repository) GetKingdoms(requestBody requests.GetKingdomsRequest) ([]sch
 			Where("ruling.ruler_refer = ?", ruler.Id).
 			Where("kingdoms.state = ?", requestBody.State).
 			Find(&kingdomsToReturn).Error
+		if err != nil {
+			return []schema.Kingdom{}, err
+		}
+
+	case requestBody.KingdomName != "" && requestBody.RulerName != "All" && requestBody.State != "": // TODO
+		var ruler schema.Ruler
+		err := tx.Where("name = ?", requestBody.RulerName).First(&ruler).Error
+		if err != nil {
+			return []schema.Kingdom{}, err
+		}
+		if ruler == (schema.Ruler{}) {
+			return []schema.Kingdom{}, errors.New("no necessary ruler")
+		}
+
+		err = tx.Joins("JOIN rulings ON rulings.kingdom_refer = kingdoms.id").
+			Where("ruling.ruler_refer = ?", ruler.Id).
+			Where("kingdoms.state = ?", requestBody.State).
+			Find(&kingdomsToReturn).Error
+		if err != nil {
+			return []schema.Kingdom{}, err
+		}
+
+	case requestBody.KingdomName != "" && requestBody.RulerName == "All" && requestBody.State == "": // TODO
+		err := tx.Where("name LIKE " + "'%" + requestBody.KingdomName + "%'").Find(&kingdomsToReturn).Error
 		if err != nil {
 			return []schema.Kingdom{}, err
 		}

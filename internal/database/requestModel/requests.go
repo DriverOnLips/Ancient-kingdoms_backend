@@ -7,8 +7,9 @@ import (
 )
 
 type GetKingdomsRequest struct {
-	Ruler string
-	State string
+	KingdomName string
+	RulerName   string
+	State       string
 }
 
 type GetRulersRequest struct {
