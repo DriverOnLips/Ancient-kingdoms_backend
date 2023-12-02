@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -104,6 +105,8 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 func (a *Application) getKingdom(ctx *gin.Context) {
 	var kingdom schema.Kingdom
 	kingdomID, err := strconv.Atoi(ctx.Query("id"))
+
+	fmt.Println(ctx)
 
 	if err != nil {
 		response := Response{
