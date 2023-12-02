@@ -1,33 +1,67 @@
 package app
 
 import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
+	config "kingdoms/internal/config"
 	"kingdoms/internal/database/connect"
-	requests "kingdoms/internal/database/requestModel"
 	"kingdoms/internal/database/schema"
+	role "kingdoms/internal/server/app/userRole"
+	requestsModels "kingdoms/internal/server/models/requestModels"
+	"kingdoms/internal/server/models/serverModels"
+	"kingdoms/internal/server/redis"
+
 	"kingdoms/internal/server/processing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 )
 
 type Application struct {
-	repo processing.Repository
-	r    *gin.Engine
+	config *config.Config
+	repo   *processing.Repository
+	redis  *redis.Client
+	r      *gin.Engine
 }
 
-func New() Application {
-	app := Application{}
+func New(ctx context.Context) (*Application, error) {
+	cfg, err := config.NewConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	repo, _ := processing.New(connect.FromEnv())
+	repo, err := processing.New(connect.FromEnv())
+	if err != nil {
+		return nil, err
+	}
 
-	app.repo = *repo
+	redisClient, err := redis.New(ctx, cfg.Redis)
+	if err != nil {
+		return nil, err
+	}
 
-	return app
+	return &Application{
+		config: cfg,
+		repo:   repo,
+		redis:  redisClient,
+	}, nil
+}
 
+func (a *Application) Run() error {
+	log.Println("application start running")
+	a.StartServer()
+	log.Println("application shut down")
+
+	return nil
 }
 
 func (a *Application) StartServer() {
@@ -53,9 +87,14 @@ func (a *Application) StartServer() {
 
 	a.r.DELETE("kingdom_ruler_delete/:kingdom_name/:ruler_name/:ruling_id", a.deleteKingdomRuler)
 
+	// // никто не имеет доступа
+	// a.r.Use(a.WithAuthCheck()).GET("/ping", a.login)
+	// // или ниженаписанное значит что доступ имеют менеджер и админ
+	// a.r.Use(a.WithAuthCheck(role.Manager, role.Admin)).GET("/ping", a.login)
+
 	a.r.GET("login", a.checkLogin)
-	a.r.PUT("login", a.login)
-	a.r.PUT("signup", a.signup)
+	a.r.POST("login", a.login)
+	a.r.POST("signup", a.signup)
 	a.r.DELETE("logout", a.logout)
 
 	a.r.Run(":8000")
@@ -74,7 +113,7 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 	ruler := ctx.Query("rulerName")
 	state := ctx.Query("state")
 
-	requestBody := requests.GetKingdomsRequest{
+	requestBody := requestsModels.GetKingdomsRequest{
 		KingdomName: name,
 		RulerName:   ruler,
 		State:       state,
@@ -141,7 +180,7 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) getRulers(ctx *gin.Context) {
-	var requestBody requests.GetRulersRequest
+	var requestBody requestsModels.GetRulersRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -209,7 +248,7 @@ func (a *Application) editKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
-	var requestBody requests.CreateRulerForKingdomRequest
+	var requestBody requestsModels.CreateRulerForKingdomRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
 		return
@@ -241,7 +280,7 @@ func (a *Application) editRuler(ctx *gin.Context) {
 }
 
 func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
-	var requestBody requests.RulerStateChangeRequest
+	var requestBody requestsModels.RulerStateChangeRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -267,7 +306,7 @@ func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
 }
 
 func (a *Application) rulerStateChangeUser(ctx *gin.Context) {
-	var requestBody requests.RulerStateChangeRequest
+	var requestBody requestsModels.RulerStateChangeRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -340,12 +379,94 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 
 }
 
-func (a *Application) login(ctx *gin.Context) {
+func (a *Application) login(gCtx *gin.Context) {
+	cfg := a.config
+	req := &loginReq{}
 
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(req.Login)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
+		// значит проверка пройдена
+		// генерируем ему jwt
+		token := jwt.NewWithClaims(cfg.JWT.SigningMethod, &serverModels.JWTClaims{
+			StandardClaims: jwt.StandardClaims{
+				ExpiresAt: time.Now().Add(cfg.JWT.ExpiresIn).Unix(),
+				IssuedAt:  time.Now().Unix(),
+				Issuer:    "bitop-admin",
+			},
+			UserUUID: uuid.New(), // test uuid
+			Role:     user.Role,
+		})
+		if token == nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+			return
+		}
+
+		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
+		if err != nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+			return
+		}
+
+		gCtx.JSON(http.StatusOK, serverModels.LoginResponce{
+			ExpiresIn:   cfg.JWT.ExpiresIn,
+			AccessToken: strToken,
+			TokenType:   "Bearer",
+		})
+	}
+
+	gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
 }
 
-func (a *Application) signup(ctx *gin.Context) {
+func (a *Application) signup(gCtx *gin.Context) {
+	req := &registerReq{}
 
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	if req.Pass == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+		return
+	}
+
+	if req.Name == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		return
+	}
+
+	err = a.repo.Singup(&schema.User{
+		UUID: uuid.New(),
+		Role: role.Buyer,
+		Name: req.Name,
+		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	gCtx.JSON(http.StatusOK, &registerResp{
+		Ok: true,
+	})
+}
+
+func generateHashString(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func (a *Application) logout(ctx *gin.Context) {

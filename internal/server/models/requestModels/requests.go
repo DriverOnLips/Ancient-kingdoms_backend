@@ -1,4 +1,4 @@
-package requests
+package requestsModels
 
 import (
 	"kingdoms/internal/database/schema"
