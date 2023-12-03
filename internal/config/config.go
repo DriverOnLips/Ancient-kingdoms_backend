@@ -69,8 +69,7 @@ func NewConfig(ctx context.Context) (*Config, error) {
 		return nil, err
 	}
 
-	cfg.Redis.Host = os.Getenv("REDIS_PORT")
-	fmt.Println(cfg.Redis.Host)
+	cfg.Redis.Host = os.Getenv("REDIS_HOST")
 
 	cfg.Redis.Port, err = strconv.Atoi(os.Getenv(envRedisPort))
 	if err != nil {
