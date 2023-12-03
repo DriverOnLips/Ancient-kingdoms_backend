@@ -2,8 +2,9 @@ package processing
 
 import (
 	"errors"
-	requests "kingdoms/internal/database/requestModel"
-	schema "kingdoms/internal/database/schema"
+	"kingdoms/internal/database/schema"
+	role "kingdoms/internal/server/app/userRole"
+	requestsModels "kingdoms/internal/server/models/requestModels"
 
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
@@ -25,7 +26,7 @@ func New(connect string) (*Repository, error) {
 	}, nil
 }
 
-func (r *Repository) GetKingdoms(requestBody requests.GetKingdomsRequest) ([]schema.Kingdom, error) {
+func (r *Repository) GetKingdoms(requestBody requestsModels.GetKingdomsRequest) ([]schema.Kingdom, error) {
 	kingdomsToReturn := []schema.Kingdom{}
 
 	var tx *gorm.DB = r.db
@@ -145,7 +146,7 @@ func (r *Repository) GetKingdom(kingdom schema.Kingdom) (schema.Kingdom, error) 
 	}
 }
 
-func (r *Repository) GetRulers(requestBody requests.GetRulersRequest) ([]schema.Ruler, error) {
+func (r *Repository) GetRulers(requestBody requestsModels.GetRulersRequest) ([]schema.Ruler, error) {
 	var rulersToReturn []schema.Ruler
 
 	var tx *gorm.DB = r.db
@@ -210,7 +211,7 @@ func (r *Repository) CreateRuler(ruler schema.Ruler) error {
 	return r.db.Create(&ruler).Error
 }
 
-func (r *Repository) CreateRulerForKingdom(requestBody requests.CreateRulerForKingdomRequest) error {
+func (r *Repository) CreateRulerForKingdom(requestBody requestsModels.CreateRulerForKingdomRequest) error {
 	err := r.CreateRuler(requestBody.Ruler)
 	if err != nil {
 		return err
@@ -231,18 +232,18 @@ func (r *Repository) EditRuler(ruler schema.Ruler) error {
 		Updates(ruler).Error
 }
 
-func (r *Repository) GetUserRole(username string) (string, error) {
+func (r *Repository) GetUserRole(username string) (role.Role, error) {
 	user := &schema.User{}
 
 	err := r.db.Where("name = ?", username).First(&user).Error
 	if err != nil {
-		return "", err
+		return role.Unknown, err
 	}
 	if user == (&schema.User{}) {
-		return "", errors.New("no user found")
+		return role.Unknown, errors.New("no user found")
 	}
 
-	return user.Rank, nil
+	return user.Role, nil
 }
 
 func (r *Repository) RulerStateChange(id int, state string) error {
@@ -269,7 +270,7 @@ func (r *Repository) DeleteKingdomRuler(kingdomName string, rulerName string, ru
 		Where("id = ?", rulingID).Delete(&schema.Ruling{}).Error
 }
 
-func (r *Repository) Register(user *schema.User) error {
+func (r *Repository) Signup(user *schema.User) error {
 	if user.UUID == uuid.Nil {
 		user.UUID = uuid.New()
 	}

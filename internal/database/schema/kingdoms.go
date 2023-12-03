@@ -18,10 +18,10 @@ type Kingdom struct {
 }
 
 type User struct {
-	UUID uuid.UUID `gorm:"type:uuid"`
-	Name string    `json:"name"`
-	Role role.Role `sql:"type:string;"`
-	Pass string
+	UUID     uuid.UUID `gorm:"type:uuid"`
+	Name     string    `json:"name"`
+	Role     role.Role `sql:"type:string"`
+	Password string
 }
 
 type Ruler struct {

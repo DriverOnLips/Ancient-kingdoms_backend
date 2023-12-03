@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	role "kingdoms/internal/server/app/userRole"
+	"kingdoms/internal/server/models/serverModels"
 	"log"
 	"net/http"
 	"strings"
@@ -15,10 +16,10 @@ import (
 const jwtPrefix = "Bearer "
 
 func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Context) {
-	return func(gCtx *gin.Context) {
-		jwtStr := gCtx.GetHeader("Authorization")
+	return func(ctx *gin.Context) {
+		jwtStr := ctx.GetHeader("Authorization")
 		if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-			gCtx.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
+			ctx.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
 
 			return // завершаем обработку
 		}
@@ -26,36 +27,36 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Co
 		// отрезаем префикс
 		jwtStr = jwtStr[len(jwtPrefix):]
 		// проверяем jwt в блеклист редиса
-		err := a.redis.CheckJWTInBlacklist(gCtx.Request.Context(), jwtStr)
+		err := a.redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
 		if err == nil { // значит что токен в блеклисте
-			gCtx.AbortWithStatus(http.StatusForbidden)
+			ctx.AbortWithStatus(http.StatusForbidden)
 
 			return
 		}
 		if !errors.Is(err, redis.Nil) { // значит что это не ошибка отсуствия - внутренняя ошибка
-			gCtx.AbortWithError(http.StatusInternalServerError, err)
+			ctx.AbortWithError(http.StatusInternalServerError, err)
 
 			return
 		}
 
-		token, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 			return []byte(a.config.JWT.Token), nil
 		})
 		if err != nil {
-			gCtx.AbortWithStatus(http.StatusForbidden)
+			ctx.AbortWithStatus(http.StatusForbidden)
 			log.Println(err)
 
 			return
 		}
 
-		myClaims := token.Claims.(*ds.JWTClaims)
+		myClaims := token.Claims.(*serverModels.JWTClaims)
 
 		for _, oneOfAssignedRole := range assignedRoles {
 			if myClaims.Role == oneOfAssignedRole {
-				gCtx.Next()
+				ctx.Next()
 			}
 		}
-		gCtx.AbortWithStatus(http.StatusForbidden)
+		ctx.AbortWithStatus(http.StatusForbidden)
 		log.Printf("role %s is not assigned in %s", myClaims.Role, assignedRoles)
 
 		return

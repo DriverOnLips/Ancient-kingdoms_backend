@@ -376,23 +376,23 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 
 }
 
-func (a *Application) login(gCtx *gin.Context) {
+func (a *Application) login(ctx *gin.Context) {
 	cfg := a.config
-	req := &loginReq{}
+	request := &serverModels.LoginRequest{}
 
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	err := json.NewDecoder(ctx.Request.Body).Decode(request)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		ctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
-	user, err := a.repo.GetUserByName(req.Login)
+	user, err := a.repo.GetUserByName(request.Login)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
-	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
+	if request.Login == user.Name && user.Password == generateHashString(request.Password) {
 		// значит проверка пройдена
 		// генерируем ему jwt
 		token := jwt.NewWithClaims(cfg.JWT.SigningMethod, &serverModels.JWTClaims{
@@ -405,65 +405,65 @@ func (a *Application) login(gCtx *gin.Context) {
 			Role:     user.Role,
 		})
 		if token == nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+			ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
 			return
 		}
 
 		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
 		if err != nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+			ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
 			return
 		}
 
-		gCtx.JSON(http.StatusOK, serverModels.LoginResponce{
-			ExpiresIn:   cfg.JWT.ExpiresIn,
+		ctx.JSON(http.StatusOK, serverModels.LoginResponce{
+			ExpiresIn:   int(cfg.JWT.ExpiresIn),
 			AccessToken: strToken,
 			TokenType:   "Bearer",
 		})
 	}
 
-	gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
+	ctx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
 }
 
-func (a *Application) signup(gCtx *gin.Context) {
-	req := &registerReq{}
+func (a *Application) signup(ctx *gin.Context) {
+	request := &serverModels.RegisterRequest{}
 
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	err := json.NewDecoder(ctx.Request.Body).Decode(request)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		ctx.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
-	if req.Pass == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+	if request.Password == "" {
+		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
 		return
 	}
 
-	if req.Name == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+	if request.Name == "" {
+		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
 		return
 	}
 
-	err = a.repo.Singup(&schema.User{
-		UUID: uuid.New(),
-		Role: role.Buyer,
-		Name: req.Name,
-		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+	err = a.repo.Signup(&schema.User{
+		UUID:     uuid.New(),
+		Role:     role.Buyer,
+		Name:     request.Name,
+		Password: generateHashString(request.Password), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
 	})
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
-	gCtx.JSON(http.StatusOK, &registerResp{
-		Ok: true,
+	ctx.JSON(http.StatusOK, &serverModels.RegisterResponce{
+		Status: true,
 	})
 }
 
-func generateHashString(s string) string {
-	h := sha1.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
+func generateHashString(str string) string {
+	hasher := sha1.New()
+	hasher.Write([]byte(str))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (a *Application) logout(ctx *gin.Context) {
@@ -478,25 +478,25 @@ func (a *Application) logout(ctx *gin.Context) {
 	// отрезаем префикс
 	jwtStr = jwtStr[len(jwtPrefix):]
 
-	_, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(a.config.JWT.Token), nil
 	})
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		ctx.AbortWithError(http.StatusBadRequest, err)
 		log.Println(err)
 
 		return
 	}
 
 	// сохраняем в блеклист редиса
-	err = a.redis.WriteJWTToBlacklist(gCtx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
+	err = a.redis.WriteJWTToBlacklist(ctx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		ctx.AbortWithError(http.StatusInternalServerError, err)
 
 		return
 	}
 
-	gCtx.Status(http.StatusOK)
+	ctx.Status(http.StatusOK)
 }
 
 // func (a *Application) loadKingdoms(c *gin.Context) {

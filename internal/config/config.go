@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -30,6 +31,9 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
+	ExpiresIn     time.Duration
+	SigningMethod jwt.SigningMethod
+	Token         string
 }
 
 const (
@@ -74,6 +78,10 @@ func NewConfig(ctx context.Context) (*Config, error) {
 
 	cfg.Redis.Password = os.Getenv(envRedisPass)
 	cfg.Redis.User = os.Getenv(envRedisUser)
+
+	cfg.JWT.ExpiresIn = 360_000_000_000
+	cfg.JWT.SigningMethod = jwt.SigningMethodHS256
+	cfg.JWT.Token = "test"
 
 	log.Info("config parsed")
 
