@@ -3,18 +3,16 @@ package main
 import (
 	"log"
 
-	"kingdoms/internal/pkg/app"
+	"kingdoms/internal/server/app"
 )
 
-// @title BITOP
+// @title
 // @version 1.0
-// @description Bmstu Open IT Platform
+// @description
 
 // @contact.name API Support
-// @contact.url https://vk.com/bmstu_schedule
-// @contact.email bitop@spatecon.ru
-
-// @license.name AS IS (NO WARRANTY)
+// @contact.url
+// @contact.email
 
 // @host 127.0.0.1
 // @schemes https http

@@ -1,10 +1,15 @@
-package database
+package requestsModels
 
-import "gorm.io/datatypes"
+import (
+	"kingdoms/internal/database/schema"
+
+	"gorm.io/datatypes"
+)
 
 type GetKingdomsRequest struct {
-	Ruler string
-	State string
+	KingdomName string
+	RulerName   string
+	State       string
 }
 
 type GetRulersRequest struct {
@@ -19,7 +24,7 @@ type RulerStateChangeRequest struct {
 }
 
 type CreateRulerForKingdomRequest struct {
-	Ruler          Ruler
-	Kingdom        Kingdom
+	Ruler          schema.Ruler
+	Kingdom        schema.Kingdom
 	BeginGoverning datatypes.Date
 }

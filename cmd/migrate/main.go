@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"kingdoms/internal/app/connect"
-	"kingdoms/internal/app/database"
+	"kingdoms/internal/database/connect"
+	"kingdoms/internal/database/schema"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -51,7 +51,7 @@ func MigrateSchema(db *gorm.DB) error {
 }
 
 func MigrateKingdom(db *gorm.DB) error {
-	err := db.AutoMigrate(&database.Kingdom{})
+	err := db.AutoMigrate(&schema.Kingdom{})
 	if err != nil {
 		fmt.Println("Error migrating Kingdom to db")
 		return err
@@ -61,7 +61,7 @@ func MigrateKingdom(db *gorm.DB) error {
 }
 
 func MigrateUser(db *gorm.DB) error {
-	err := db.AutoMigrate(&database.User{})
+	err := db.AutoMigrate(&schema.User{})
 	if err != nil {
 		fmt.Println("Error migrating User to db")
 		return err
@@ -71,7 +71,7 @@ func MigrateUser(db *gorm.DB) error {
 }
 
 func MigrateRuler(db *gorm.DB) error {
-	err := db.AutoMigrate(&database.Ruler{})
+	err := db.AutoMigrate(&schema.Ruler{})
 	if err != nil {
 		fmt.Println("Error migrating Ruler to db")
 		return err
@@ -81,7 +81,7 @@ func MigrateRuler(db *gorm.DB) error {
 }
 
 func MigrateRuling(db *gorm.DB) error {
-	err := db.AutoMigrate(&database.Ruling{})
+	err := db.AutoMigrate(&schema.Ruling{})
 	if err != nil {
 		fmt.Println("Error migrating Ruling to db")
 		return err

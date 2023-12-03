@@ -1,41 +1,74 @@
 package app
 
 import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
-	"kingdoms/internal/app/connect"
-	"kingdoms/internal/app/database"
-	"kingdoms/internal/app/repository"
+	config "kingdoms/internal/config"
+	"kingdoms/internal/database/connect"
+	"kingdoms/internal/database/schema"
+	role "kingdoms/internal/server/app/userRole"
+	requestsModels "kingdoms/internal/server/models/requestModels"
+	"kingdoms/internal/server/models/serverModels"
+	"kingdoms/internal/server/redis"
+
+	"kingdoms/internal/server/processing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 )
 
 type Application struct {
-	repo repository.Repository
-	r    *gin.Engine
+	config *config.Config
+	repo   *processing.Repository
+	redis  *redis.Client
+	r      *gin.Engine
 }
 
-func New() Application {
-	app := Application{}
+func New(ctx context.Context) (*Application, error) {
+	cfg, err := config.NewConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	repo, _ := repository.New(connect.FromEnv())
+	repo, err := processing.New(connect.FromEnv())
+	if err != nil {
+		return nil, err
+	}
 
-	app.repo = *repo
+	redisClient, err := redis.New(ctx, cfg.Redis)
+	if err != nil {
+		return nil, err
+	}
 
-	return app
+	return &Application{
+		config: cfg,
+		repo:   repo,
+		redis:  redisClient,
+	}, nil
+}
 
+func (a *Application) Run() error {
+	log.Println("application start running")
+	a.StartServer()
+	log.Println("application shut down")
+
+	return nil
 }
 
 func (a *Application) StartServer() {
 	log.Println("Server started")
 
 	a.r = gin.Default()
-
-	a.r.LoadHTMLGlob("../../templates/*.html")
-	a.r.Static("/css", "../../templates/css")
-	a.r.Static("/js", "../../templates/js")
 
 	a.r.GET("kingdoms", a.getKingdoms)
 	a.r.GET("kingdom", a.getKingdom)
@@ -55,9 +88,14 @@ func (a *Application) StartServer() {
 
 	a.r.DELETE("kingdom_ruler_delete/:kingdom_name/:ruler_name/:ruling_id", a.deleteKingdomRuler)
 
-	a.r.GET("login", a.checkLogin)
-	a.r.PUT("login", a.login)
-	a.r.PUT("signup", a.signup)
+	// // никто не имеет доступа
+	a.r.Use(a.WithAuthCheck()).GET("login", a.login)
+	// // или ниженаписанное значит что доступ имеют менеджер и админ
+	// a.r.Use(a.WithAuthCheck(role.Manager, role.Admin)).GET("/ping", a.login)
+
+	// a.r.GET("login", a.checkLogin)
+	a.r.POST("login", a.login)
+	a.r.POST("signup", a.signup)
 	a.r.DELETE("logout", a.logout)
 
 	a.r.Run(":8000")
@@ -72,12 +110,14 @@ type Response struct {
 }
 
 func (a *Application) getKingdoms(ctx *gin.Context) {
-	ruler := ctx.Query("ruler")
+	name := ctx.Query("kingdomName")
+	ruler := ctx.Query("rulerName")
 	state := ctx.Query("state")
 
-	requestBody := database.GetKingdomsRequest{
-		Ruler: ruler,
-		State: state,
+	requestBody := requestsModels.GetKingdomsRequest{
+		KingdomName: name,
+		RulerName:   ruler,
+		State:       state,
 	}
 
 	kingdoms, err := a.repo.GetKingdoms(requestBody)
@@ -87,7 +127,9 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 			Message: "error getting necessary kingdoms: " + err.Error(),
 			Body:    nil,
 		}
+
 		ctx.JSON(http.StatusInternalServerError, response)
+
 		return
 	}
 
@@ -96,31 +138,50 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 		Message: "kingdoms found",
 		Body:    kingdoms,
 	}
+
 	ctx.JSON(http.StatusOK, response)
 }
 
 func (a *Application) getKingdom(ctx *gin.Context) {
-	var kingdom database.Kingdom
-	if err := ctx.BindJSON(&kingdom); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
-		return
-	}
+	var kingdom schema.Kingdom
+	kingdomID, err := strconv.Atoi(ctx.Query("id"))
 
-	necessaryKingdom, err := a.repo.GetKingdom(kingdom)
+	fmt.Println(ctx)
+
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error getting kingdom:"+err.Error())
-		return
-	}
-	if necessaryKingdom == (database.Kingdom{}) {
-		ctx.String(http.StatusNotFound, "no necessary kingdom")
+		response := Response{
+			Status:  "error",
+			Message: "error getting kingdom ID: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.JSON(http.StatusFound, necessaryKingdom)
+	kingdom.Id = uint(kingdomID)
+
+	kingdom, err = a.repo.GetKingdom(kingdom)
+	if err != nil {
+		response := Response{
+			Status:  "error",
+			Message: "error getting necessary kingdom: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response := Response{
+		Status:  "ok",
+		Message: "kingdom found",
+		Body:    kingdom,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (a *Application) getRulers(ctx *gin.Context) {
-	var requestBody database.GetRulersRequest
+	var requestBody requestsModels.GetRulersRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -136,7 +197,7 @@ func (a *Application) getRulers(ctx *gin.Context) {
 }
 
 func (a *Application) getRuler(ctx *gin.Context) {
-	var ruler database.Ruler
+	var ruler schema.Ruler
 	if err := ctx.BindJSON(&ruler); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
 		return
@@ -147,7 +208,7 @@ func (a *Application) getRuler(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, "error getting ruler:"+err.Error())
 		return
 	}
-	if necessaryRuler == (database.Ruler{}) {
+	if necessaryRuler == (schema.Ruler{}) {
 		ctx.String(http.StatusNotFound, "no necessary ruler")
 		return
 	}
@@ -156,7 +217,7 @@ func (a *Application) getRuler(ctx *gin.Context) {
 }
 
 func (a *Application) addKingdom(ctx *gin.Context) {
-	var kingdom database.Kingdom
+	var kingdom schema.Kingdom
 	if err := ctx.BindJSON(&kingdom); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
 		return
@@ -172,7 +233,7 @@ func (a *Application) addKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) editKingdom(ctx *gin.Context) {
-	var kingdom database.Kingdom
+	var kingdom schema.Kingdom
 	if err := ctx.BindJSON(&kingdom); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing ruler")
 		return
@@ -188,7 +249,7 @@ func (a *Application) editKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
-	var requestBody database.CreateRulerForKingdomRequest
+	var requestBody requestsModels.CreateRulerForKingdomRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
 		return
@@ -204,7 +265,7 @@ func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
 }
 
 func (a *Application) editRuler(ctx *gin.Context) {
-	var ruler database.Ruler
+	var ruler schema.Ruler
 	if err := ctx.BindJSON(&ruler); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
 		return
@@ -220,7 +281,7 @@ func (a *Application) editRuler(ctx *gin.Context) {
 }
 
 func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
-	var requestBody database.RulerStateChangeRequest
+	var requestBody requestsModels.RulerStateChangeRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -246,7 +307,7 @@ func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
 }
 
 func (a *Application) rulerStateChangeUser(ctx *gin.Context) {
-	var requestBody database.RulerStateChangeRequest
+	var requestBody requestsModels.RulerStateChangeRequest
 	if err := ctx.BindJSON(&requestBody); err != nil {
 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
 		return
@@ -319,16 +380,127 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 
 }
 
-func (a *Application) login(ctx *gin.Context) {
+func (a *Application) login(gCtx *gin.Context) {
+	cfg := a.config
+	req := &loginReq{}
 
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(req.Login)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
+		// значит проверка пройдена
+		// генерируем ему jwt
+		token := jwt.NewWithClaims(cfg.JWT.SigningMethod, &serverModels.JWTClaims{
+			StandardClaims: jwt.StandardClaims{
+				ExpiresAt: time.Now().Add(cfg.JWT.ExpiresIn).Unix(),
+				IssuedAt:  time.Now().Unix(),
+				Issuer:    "bitop-admin",
+			},
+			UserUUID: uuid.New(), // test uuid
+			Role:     user.Role,
+		})
+		if token == nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+			return
+		}
+
+		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
+		if err != nil {
+			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+			return
+		}
+
+		gCtx.JSON(http.StatusOK, serverModels.LoginResponce{
+			ExpiresIn:   cfg.JWT.ExpiresIn,
+			AccessToken: strToken,
+			TokenType:   "Bearer",
+		})
+	}
+
+	gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
 }
 
-func (a *Application) signup(ctx *gin.Context) {
+func (a *Application) signup(gCtx *gin.Context) {
+	req := &registerReq{}
 
+	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	if req.Pass == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+		return
+	}
+
+	if req.Name == "" {
+		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		return
+	}
+
+	err = a.repo.Singup(&schema.User{
+		UUID: uuid.New(),
+		Role: role.Buyer,
+		Name: req.Name,
+		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	gCtx.JSON(http.StatusOK, &registerResp{
+		Ok: true,
+	})
+}
+
+func generateHashString(s string) string {
+	h := sha1.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func (a *Application) logout(ctx *gin.Context) {
+	// получаем заголовок
+	jwtStr := ctx.GetHeader("Authorization")
+	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
+		gCtx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
 
+		return // завершаем обработку
+	}
+
+	// отрезаем префикс
+	jwtStr = jwtStr[len(jwtPrefix):]
+
+	_, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(a.config.JWT.Token), nil
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		log.Println(err)
+
+		return
+	}
+
+	// сохраняем в блеклист редиса
+	err = a.redis.WriteJWTToBlacklist(gCtx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+
+		return
+	}
+
+	gCtx.Status(http.StatusOK)
 }
 
 // func (a *Application) loadKingdoms(c *gin.Context) {

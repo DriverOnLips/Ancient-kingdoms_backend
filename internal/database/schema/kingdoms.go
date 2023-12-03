@@ -1,6 +1,9 @@
-package database
+package schema
 
 import (
+	role "kingdoms/internal/server/app/userRole"
+
+	"github.com/google/uuid"
 	"gorm.io/datatypes"
 )
 
@@ -15,9 +18,10 @@ type Kingdom struct {
 }
 
 type User struct {
-	Id   uint   `gorm:"primaryKey;AUTO_INCREMENT"`
-	Name string `gorm:"type:varchar(50);unique;not null"`
-	Rank string `gorm:"size:255"`
+	UUID uuid.UUID `gorm:"type:uuid"`
+	Name string    `json:"name"`
+	Role role.Role `sql:"type:string;"`
+	Pass string
 }
 
 type Ruler struct {
