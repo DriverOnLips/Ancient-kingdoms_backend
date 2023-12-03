@@ -288,7 +288,7 @@ func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
 		ctx.String(http.StatusBadRequest, "error getting user role:"+err.Error())
 		return
 	}
-	if userRole != "admin" {
+	if userRole != role.Admin {
 		ctx.String(http.StatusUnauthorized, "no enouth rules for executing this operation")
 		return
 	}
@@ -314,7 +314,7 @@ func (a *Application) rulerStateChangeUser(ctx *gin.Context) {
 		ctx.String(http.StatusBadRequest, "error getting user role:"+err.Error())
 		return
 	}
-	if userRole != "user" && userRole != "admin" {
+	if userRole != role.Admin && userRole != role.Manager {
 		ctx.String(http.StatusUnauthorized, "no enouth rules for executing this operation")
 		return
 	}

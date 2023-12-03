@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"kingdoms/internal/server/app"
@@ -21,7 +22,13 @@ import (
 func main() {
 	log.Println("Application start!")
 
-	a := app.New()
+	a, err := app.New(context.Background())
+	if err != nil {
+		log.Println(err)
+
+		return
+	}
+
 	a.StartServer()
 
 	log.Println("Application terminated!")

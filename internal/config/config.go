@@ -55,8 +55,7 @@ func NewConfig(ctx context.Context) (*Config, error) {
 
 	viper.SetConfigName(configName)
 	viper.SetConfigType("toml")
-	viper.AddConfigPath("config")
-	viper.AddConfigPath(".")
+	viper.AddConfigPath("../../internal/config")
 	viper.WatchConfig()
 
 	err = viper.ReadInConfig()
@@ -70,7 +69,9 @@ func NewConfig(ctx context.Context) (*Config, error) {
 		return nil, err
 	}
 
-	cfg.Redis.Host = os.Getenv(envRedisHost)
+	cfg.Redis.Host = os.Getenv("REDIS_PORT")
+	fmt.Println(cfg.Redis.Host)
+
 	cfg.Redis.Port, err = strconv.Atoi(os.Getenv(envRedisPort))
 	if err != nil {
 		return nil, fmt.Errorf("redis port must be int value: %w", err)
