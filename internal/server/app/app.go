@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	config "kingdoms/internal/config"
@@ -88,11 +89,11 @@ func (a *Application) StartServer() {
 	a.r.DELETE("kingdom_ruler_delete/:kingdom_name/:ruler_name/:ruling_id", a.deleteKingdomRuler)
 
 	// // никто не имеет доступа
-	// a.r.Use(a.WithAuthCheck()).GET("/ping", a.login)
+	a.r.Use(a.WithAuthCheck()).GET("login", a.login)
 	// // или ниженаписанное значит что доступ имеют менеджер и админ
 	// a.r.Use(a.WithAuthCheck(role.Manager, role.Admin)).GET("/ping", a.login)
 
-	a.r.GET("login", a.checkLogin)
+	// a.r.GET("login", a.checkLogin)
 	a.r.POST("login", a.login)
 	a.r.POST("signup", a.signup)
 	a.r.DELETE("logout", a.logout)
@@ -470,7 +471,36 @@ func generateHashString(s string) string {
 }
 
 func (a *Application) logout(ctx *gin.Context) {
+	// получаем заголовок
+	jwtStr := ctx.GetHeader("Authorization")
+	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
+		gCtx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
 
+		return // завершаем обработку
+	}
+
+	// отрезаем префикс
+	jwtStr = jwtStr[len(jwtPrefix):]
+
+	_, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(a.config.JWT.Token), nil
+	})
+	if err != nil {
+		gCtx.AbortWithError(http.StatusBadRequest, err)
+		log.Println(err)
+
+		return
+	}
+
+	// сохраняем в блеклист редиса
+	err = a.redis.WriteJWTToBlacklist(gCtx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
+	if err != nil {
+		gCtx.AbortWithError(http.StatusInternalServerError, err)
+
+		return
+	}
+
+	gCtx.Status(http.StatusOK)
 }
 
 // func (a *Application) loadKingdoms(c *gin.Context) {

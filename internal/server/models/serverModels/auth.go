@@ -10,3 +10,12 @@ type LoginResponce struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
 }
+
+type registerReq struct {
+	Name string `json:"name"` // лучше назвать то же самое что login
+	Pass string `json:"pass"`
+}
+
+type registerResp struct {
+	Ok bool `json:"ok"`
+}

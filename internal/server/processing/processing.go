@@ -5,6 +5,7 @@ import (
 	requests "kingdoms/internal/database/requestModel"
 	schema "kingdoms/internal/database/schema"
 
+	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -266,4 +267,25 @@ func (r *Repository) DeleteKingdomRuler(kingdomName string, rulerName string, ru
 	return r.db.Where("kingdom_name = ?", kingdomName).
 		Where("ruler_name = ?", rulerName).
 		Where("id = ?", rulingID).Delete(&schema.Ruling{}).Error
+}
+
+func (r *Repository) Register(user *schema.User) error {
+	if user.UUID == uuid.Nil {
+		user.UUID = uuid.New()
+	}
+
+	return r.db.Create(user).Error
+}
+
+func (r *Repository) GetUserByName(name string) (*schema.User, error) {
+	user := &schema.User{
+		Name: name,
+	}
+
+	err := r.db.First(user).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
