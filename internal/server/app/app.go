@@ -79,6 +79,7 @@ func (a *Application) StartServer() {
 	a.r.PUT("kingdom/edit", a.editKingdom)
 	a.r.PUT("kingdom/ruler_to_kingdom", a.CreateRulerForKingdom)
 
+	// a.r.Use(a.WithAuthCheck(role.Moderator, role.Admin)).PUT("ruler/edit", a.editRuler)
 	a.r.PUT("ruler/edit", a.editRuler)
 	a.r.PUT("ruler/state_change/moderator", a.rulerStateChangeModerator)
 	a.r.PUT("ruler/state_change/user", a.rulerStateChangeUser)
@@ -88,12 +89,7 @@ func (a *Application) StartServer() {
 
 	a.r.DELETE("kingdom_ruler_delete/:kingdom_name/:ruler_name/:ruling_id", a.deleteKingdomRuler)
 
-	// // никто не имеет доступа
-	a.r.Use(a.WithAuthCheck()).GET("login", a.login)
-	// // или ниженаписанное значит что доступ имеют менеджер и админ
-	// a.r.Use(a.WithAuthCheck(role.Manager, role.Admin)).GET("/ping", a.login)
-
-	// a.r.GET("login", a.checkLogin)
+	a.r.GET("login", a.checkLogin)
 	a.r.POST("login", a.login)
 	a.r.POST("signup", a.signup)
 	a.r.DELETE("logout", a.logout)
@@ -474,7 +470,7 @@ func (a *Application) logout(ctx *gin.Context) {
 	// получаем заголовок
 	jwtStr := ctx.GetHeader("Authorization")
 	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-		gCtx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
+		ctx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
 
 		return // завершаем обработку
 	}
