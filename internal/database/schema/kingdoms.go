@@ -8,7 +8,7 @@ import (
 )
 
 type Kingdom struct {
-	Id          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
+	ID          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
 	Name        string `gorm:"type:varchar(50);unique;not null"`
 	Area        int    `gorm:"not null"`
 	Capital     string `gorm:"type:varchar(50);not null"`
@@ -18,27 +18,29 @@ type Kingdom struct {
 }
 
 type User struct {
+	ID       uint      `gorm:"primaryKey;AUTO_INCREMENT"`
 	UUID     uuid.UUID `gorm:"type:uuid"`
 	Name     string    `json:"name"`
 	Role     role.Role `sql:"type:string"`
 	Password string
 }
 
-type Ruler struct {
-	Id             uint           `gorm:"primaryKey;AUTO_INCREMENT"`
-	Name           string         `gorm:"type:varchar(50);unique;not null"`
-	State          string         `gorm:"type:varchar(50);not null"`
-	DateOfBirth    datatypes.Date `gorm:"not null"`
-	BeginGoverning datatypes.Date `gorm:"not null"`
-	EndGoverning   datatypes.Date
+type Campaign struct {
+	ID          uint           `gorm:"primaryKey;AUTO_INCREMENT"`
+	UserRefer   int            `gorm:"not null"`
+	User        User           `gorm:"foreignKey:UserRefer"`
+	KingName    string         `gorm:"type:varchar(50);unique;not null"`
+	State       string         `gorm:"type:varchar(50);not null"`
+	Development datatypes.Date `gorm:"not null"`
+	Begin       datatypes.Date
+	End         datatypes.Date
 }
 
-type Ruling struct {
-	Id             uint           `gorm:"primaryKey:AUTO_INCREMENT"`
-	RulerRefer     int            `gorm:"not null"`
-	KingdomRefer   int            `gorm:"not null"`
-	Ruler          Ruler          `gorm:"foreignKey:RulerRefer"`
-	Kingdom        Kingdom        `gorm:"foreignKey:KingdomRefer"`
-	BeginGoverning datatypes.Date `gorm:"not null"`
-	EndGoverning   datatypes.Date
+type Kingdom4campaign struct {
+	ID            uint     `gorm:"primaryKey;AUTO_INCREMENT"`
+	CampaignRefer int      `gorm:"not null"`
+	Campaign      Campaign `gorm:"foreignKey:CampaignRefer"`
+	KingdomRefer  int      `gorm:"not null"`
+	Kingdom       Kingdom  `gorm:"foreignKey:KingdomRefer"`
+	NumKingdoms   int      `gorm:"not null"`
 }

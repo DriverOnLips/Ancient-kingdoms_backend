@@ -18,6 +18,15 @@ const jwtPrefix = "Bearer "
 func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Context) {
 	return func(ctx *gin.Context) {
 		jwtStr := ctx.GetHeader("Authorization")
+
+		if jwtStr == "" {
+			var cookieErr error
+			jwtStr, cookieErr = ctx.Cookie("kingdoms-token")
+			if cookieErr != nil {
+				ctx.AbortWithStatus(http.StatusBadRequest)
+			}
+		}
+
 		if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
 			ctx.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
 
@@ -51,16 +60,23 @@ func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Co
 
 		myClaims := token.Claims.(*serverModels.JWTClaims)
 
+		isAssigned := false
+
 		for _, oneOfAssignedRole := range assignedRoles {
 			if myClaims.Role == oneOfAssignedRole {
-				ctx.Next()
+				isAssigned = true
+				break
 			}
 		}
-		ctx.AbortWithStatus(http.StatusForbidden)
-		log.Printf("role %s is not assigned in %s", myClaims.Role, assignedRoles)
 
-		return
+		if !isAssigned {
+			ctx.AbortWithStatus(http.StatusForbidden)
+			log.Printf("role %d is not assigned in %d", myClaims.Role, assignedRoles)
+			return
+		}
 
+		ctx.Set("role", myClaims.Role)
+		ctx.Set("userUUID", myClaims.UserUUID)
 	}
 
 }

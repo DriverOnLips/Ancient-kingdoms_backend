@@ -27,65 +27,65 @@ func main() {
 }
 
 func MigrateSchema(db *gorm.DB) error {
-	err := MigrateKingdom(db)
-	if err != nil {
-		return err
-	}
-
-	err = MigrateUser(db)
-	if err != nil {
-		return err
-	}
-
-	err = MigrateRuler(db)
-	if err != nil {
-		return err
-	}
-
-	err = MigrateRuling(db)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func MigrateKingdom(db *gorm.DB) error {
 	err := db.AutoMigrate(&schema.Kingdom{})
 	if err != nil {
-		fmt.Println("Error migrating Kingdom to db")
 		return err
 	}
 
-	return nil
-}
-
-func MigrateUser(db *gorm.DB) error {
-	err := db.AutoMigrate(&schema.User{})
+	err = db.AutoMigrate(&schema.User{})
 	if err != nil {
-		fmt.Println("Error migrating User to db")
 		return err
 	}
 
-	return nil
-}
-
-func MigrateRuler(db *gorm.DB) error {
-	err := db.AutoMigrate(&schema.Ruler{})
+	err = db.AutoMigrate(&schema.Campaign{})
 	if err != nil {
-		fmt.Println("Error migrating Ruler to db")
 		return err
 	}
 
-	return nil
-}
-
-func MigrateRuling(db *gorm.DB) error {
-	err := db.AutoMigrate(&schema.Ruling{})
+	err = db.AutoMigrate(&schema.Kingdom4campaign{})
 	if err != nil {
-		fmt.Println("Error migrating Ruling to db")
 		return err
 	}
 
 	return nil
 }
+
+// func MigrateKingdom(db *gorm.DB) error {
+// 	err := db.AutoMigrate(&schema.Kingdom{})
+// 	if err != nil {
+// 		fmt.Println("Error migrating Kingdom to db")
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
+// func MigrateUser(db *gorm.DB) error {
+// 	err := db.AutoMigrate(&schema.User{})
+// 	if err != nil {
+// 		fmt.Println("Error migrating User to db")
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
+// func MigrateCampaign(db *gorm.DB) error {
+// 	err := db.AutoMigrate(&schema.Campaign{})
+// 	if err != nil {
+// 		fmt.Println("Error migrating Campaign to db")
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
+// func MigrateKingdom4campaign(db *gorm.DB) error {
+// 	err := db.AutoMigrate(&schema.Kingdom4campaign{})
+// 	if err != nil {
+// 		fmt.Println("Error migrating Kingdom4campaign to db")
+// 		return err
+// 	}
+
+// 	return nil
+// }
