@@ -11,4 +11,5 @@ type JWTClaims struct {
 	jwt.StandardClaims
 	UserUUID uuid.UUID `json:"user_uuid"`
 	Role     role.Role
+	UserName string `json:"user_name"`
 }

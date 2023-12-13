@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"kingdoms/internal/database/connect"
 	"kingdoms/internal/database/schema"
 	role "kingdoms/internal/server/app/userRole"
+	"kingdoms/internal/server/models/responseModels"
 	"kingdoms/internal/server/models/serverModels"
 	"kingdoms/internal/server/redis"
 
@@ -98,18 +98,13 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
-type Response struct {
-	Status  string      `json:"status"`
-	Message string      `json:"message"`
-	Body    interface{} `json:"body"`
-}
-
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 	kingdomName := ctx.Query("kingdomName")
 
 	kingdoms, err := a.repo.GetKingdoms(kingdomName)
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
 			Message: "error getting necessary kingdoms: " + err.Error(),
 			Body:    nil,
@@ -120,7 +115,8 @@ func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 		return
 	}
 
-	response := Response{
+	response := responseModels.ResponseDefault{
+		Code:    200,
 		Status:  "ok",
 		Message: "kingdoms found",
 		Body:    kingdoms,
@@ -132,12 +128,15 @@ func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 func (a *Application) getKingdom(ctx *gin.Context) {
 	kingdomID, err := strconv.Atoi(ctx.Query("id"))
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
-			Message: "error getting kingdom ID: " + err.Error(),
+			Message: "error getting kingdom by ID: " + err.Error(),
 			Body:    nil,
 		}
+
 		ctx.JSON(http.StatusInternalServerError, response)
+
 		return
 	}
 
@@ -146,7 +145,8 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 
 	kingdom, err = a.repo.GetKingdom(kingdom)
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
 			Message: "error getting necessary kingdom: " + err.Error(),
 			Body:    nil,
@@ -155,7 +155,8 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 		return
 	}
 
-	response := Response{
+	response := responseModels.ResponseDefault{
+		Code:    200,
 		Status:  "ok",
 		Message: "kingdom found",
 		Body:    kingdom,
@@ -361,27 +362,24 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 // }
 
 func (a *Application) checkLogin(ctx *gin.Context) {
-	jwtStr := ctx.GetHeader("Authorization")
-
-	if jwtStr == "" {
-		var cookieErr error
-		jwtStr, cookieErr = ctx.Cookie("kingdoms-token")
-		if cookieErr != nil {
-			response := Response{
-				Status:  "error",
-				Message: "no auth",
-				Body:    nil,
-			}
-
-			ctx.JSON(http.StatusInternalServerError, response)
-			return
+	jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
+	if cookieErr != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting cookie",
+			Body:    nil,
 		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
 	}
 
 	if !strings.HasPrefix(jwtStr, jwtPrefix) {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
-			Message: "no auth",
+			Message: "error parsing jwt token: no prefix",
 			Body:    nil,
 		}
 
@@ -392,23 +390,26 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 	jwtStr = jwtStr[len(jwtPrefix):]
 	err := a.redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
 	if err == nil {
-		response := Response{
-			Status:  "error",
-			Message: "no auth",
+		response := responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "not authorized: token in black list",
 			Body:    nil,
 		}
 
-		ctx.JSON(http.StatusInternalServerError, response)
+		ctx.JSON(http.StatusOK, response)
 		return
 	}
 
 	token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(a.config.JWT.Token), nil
 	})
+
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
-			Message: "no auth",
+			Message: "error parsing jwt token: error parsing with claims",
 			Body:    nil,
 		}
 
@@ -422,24 +423,29 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 
 	for _, oneOfAssignedRole := range assignedRoles {
 		if myClaims.Role == oneOfAssignedRole {
-			response := Response{
-				Status:  "error",
-				Message: "auth",
-				Body:    nil,
+			response := responseModels.ResponseDefault{
+				Code:    200,
+				Status:  "ok",
+				Message: "authorized",
+				Body: map[string]interface{}{
+					"user_role": oneOfAssignedRole,
+					"user_name": myClaims.UserName,
+				},
 			}
 
-			ctx.JSON(http.StatusInternalServerError, response)
+			ctx.JSON(http.StatusOK, response)
 			return
 		}
 	}
 
-	response := Response{
-		Status:  "error",
-		Message: "no auth",
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "not authorized: no role found",
 		Body:    nil,
 	}
 
-	ctx.JSON(http.StatusInternalServerError, response)
+	ctx.JSON(http.StatusOK, response)
 	return
 }
 
@@ -449,49 +455,90 @@ func (a *Application) login(ctx *gin.Context) {
 
 	err := json.NewDecoder(ctx.Request.Body).Decode(request)
 	if err != nil {
-		ctx.AbortWithError(http.StatusBadRequest, err)
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing request params: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
 	user, err := a.repo.GetUserByName(request.Name)
 	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
 	if request.Name == user.Name && user.Password == generateHashString(request.Password) {
-		// значит проверка пройдена
-		// генерируем ему jwt
 		token := jwt.NewWithClaims(cfg.JWT.SigningMethod, &serverModels.JWTClaims{
 			StandardClaims: jwt.StandardClaims{
 				ExpiresAt: time.Now().Add(cfg.JWT.ExpiresIn).Unix(),
 				IssuedAt:  time.Now().Unix(),
 				Issuer:    "bitop-admin",
 			},
-			UserUUID: uuid.New(), // test uuid
+			UserUUID: uuid.New(),
 			Role:     user.Role,
+			UserName: user.Name,
 		})
 		if token == nil {
-			ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "token is nil",
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
 			return
 		}
 
 		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
 		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "cant create str token",
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
 			return
 		}
 
-		ctx.SetCookie("kingdoms-token", "Bearer "+strToken, int(cfg.JWT.ExpiresIn), "", "", true, true)
+		ctx.SetCookie("kingdoms-token", jwtPrefix+strToken, int(cfg.JWT.ExpiresIn), "", "", true, true)
 
-		ctx.JSON(http.StatusOK, serverModels.LoginResponce{
-			ExpiresIn:   int(cfg.JWT.ExpiresIn),
-			AccessToken: strToken,
-			TokenType:   "Bearer",
-		})
+		response := responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "user session starts successfully",
+			Body: map[string]interface{}{
+				"user_role": user.Role,
+				"user_name": user.Name,
+			},
+		}
+
+		ctx.JSON(http.StatusOK, response)
+		return
 	}
 
-	ctx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
+	response := responseModels.ResponseDefault{
+		Code:    403,
+		Status:  "error",
+		Message: "incorrect user data",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusForbidden, response)
 }
 
 func (a *Application) signup(ctx *gin.Context) {
@@ -499,17 +546,38 @@ func (a *Application) signup(ctx *gin.Context) {
 
 	err := json.NewDecoder(ctx.Request.Body).Decode(request)
 	if err != nil {
-		ctx.AbortWithError(http.StatusBadRequest, err)
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing request params: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
 	if request.Password == "" {
-		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("password is empty"))
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "password is empty",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
 	if request.Name == "" {
-		ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "name is empty",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
@@ -517,69 +585,99 @@ func (a *Application) signup(ctx *gin.Context) {
 		UUID:     uuid.New(),
 		Role:     role.Buyer,
 		Name:     request.Name,
-		Password: generateHashString(request.Password), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+		Password: generateHashString(request.Password),
 	})
 	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error creating user entity: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, &serverModels.RegisterResponce{
-		Status: true,
-	})
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "user entity created successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 func generateHashString(str string) string {
 	hasher := sha1.New()
 	hasher.Write([]byte(str))
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (a *Application) logout(ctx *gin.Context) {
-	// получаем заголовок
-	jwtStr := ctx.GetHeader("Authorization")
-
-	if jwtStr == "" {
-		var cookieErr error
-		jwtStr, cookieErr = ctx.Cookie("kingdoms-token")
-		if cookieErr != nil {
-			response := Response{
-				Status:  "error",
-				Message: "no auth",
-				Body:    nil,
-			}
-
-			ctx.JSON(http.StatusInternalServerError, response)
-			return
+	jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
+	if cookieErr != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting cookie",
+			Body:    nil,
 		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
 	}
 
-	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-		ctx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
+	if !strings.HasPrefix(jwtStr, jwtPrefix) {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error parsing jwt token: no prefix",
+			Body:    nil,
+		}
 
-		return // завершаем обработку
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
 	}
 
-	// отрезаем префикс
 	jwtStr = jwtStr[len(jwtPrefix):]
 
 	_, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(a.config.JWT.Token), nil
 	})
 	if err != nil {
-		ctx.AbortWithError(http.StatusBadRequest, err)
-		log.Println(err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error parsing jwt token: error parsing with claims",
+			Body:    nil,
+		}
 
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	// сохраняем в блеклист редиса
 	err = a.redis.WriteJWTToBlacklist(ctx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
 	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error saving in redis black list",
+			Body:    nil,
+		}
 
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.Status(http.StatusOK)
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "user successfully logged out",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
