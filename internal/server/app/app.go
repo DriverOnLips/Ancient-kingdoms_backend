@@ -99,7 +99,7 @@ func (a *Application) StartServer() {
 }
 
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
-	kingdomName := ctx.Query("kingdomName")
+	kingdomName := ctx.Query("kingdom_name")
 
 	kingdoms, err := a.repo.GetKingdoms(kingdomName)
 	if err != nil {
