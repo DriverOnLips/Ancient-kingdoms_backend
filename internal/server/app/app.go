@@ -5,8 +5,11 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -75,6 +78,8 @@ func (a *Application) StartServer() {
 	a.r.GET("kingdom", a.getKingdom)
 	a.r.GET("applications", a.getApplications)
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
+
+	a.r.PUT("application/status", a.updateApplicationStatus)
 
 	a.r.GET("async/application", a.asyncGetApplication)
 	a.r.PUT("async/application", a.asyncPutApplicationInfo)
@@ -167,7 +172,9 @@ func (a *Application) asyncPutApplicationInfo(ctx *gin.Context) {
 	}
 
 	var applicationToPut processing.AsyncStructApplication
-	if err := ctx.BindJSON(&applicationToPut); err != nil {
+	bodyBytes, _ := ioutil.ReadAll(ctx.Request.Body)
+	err := json.Unmarshal(bodyBytes, &applicationToPut)
+	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    400,
 			Status:  "error",
@@ -176,10 +183,13 @@ func (a *Application) asyncPutApplicationInfo(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusBadRequest, response)
+
+		fmt.Println(err.Error())
+
 		return
 	}
 
-	err := a.repo.AsyncPutApplicationInfo(applicationToPut)
+	err = a.repo.AsyncPutApplicationInfo(applicationToPut)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -199,6 +209,20 @@ func (a *Application) asyncPutApplicationInfo(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) sendRequestToAsyncServer(applicationToSend processing.AsyncStructApplication) {
+	data := url.Values{
+		"Id":    {strconv.Itoa(int(applicationToSend.Id))},
+		"Check": {strconv.FormatBool(applicationToSend.Check)},
+	}
+
+	resp, err := http.PostForm("http://0.0.0.0:8080/", data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
 }
 
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
@@ -365,6 +389,64 @@ func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) updateApplicationStatus(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.UserName)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var applicationToUpdate processing.ApplicationToUpdate
+	if err := ctx.BindJSON(&applicationToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	application4Async, err := a.repo.UpdateApplicationStatus(*user, applicationToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating application status: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction status updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+
+	a.sendRequestToAsyncServer(application4Async)
 }
 
 // func (a *Application) getRuler(ctx *gin.Context) {

@@ -18,6 +18,11 @@ type KingdomFromApplication struct {
 }
 
 type AsyncStructApplication struct {
+	Id    uint `json:"Id"`
+	Check bool `json:"Check"`
+}
+
+type ApplicationToUpdate struct {
 	Id    uint
-	Check bool
+	State string
 }

@@ -218,6 +218,44 @@ func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId 
 	return applicationToReturn, nil
 }
 
+func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpdate ApplicationToUpdate) (AsyncStructApplication, error) {
+	var tx *gorm.DB = r.db
+
+	var app schema.RulerApplication
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToUpdate.Id).
+		Where("creator_refer = ?", user.Id).
+		First(&app).Error
+	if err != nil {
+		return AsyncStructApplication{}, err
+	}
+	if app == (schema.RulerApplication{}) {
+		return AsyncStructApplication{}, errors.New("no necessary application found")
+	}
+
+	err = tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToUpdate.Id).
+		Where("creator_refer = ?", user.Id).
+		Update("state", applicationToUpdate.State).Error
+	if err != nil {
+		return AsyncStructApplication{}, err
+	}
+
+	var applicationToReturn AsyncStructApplication
+	err = tx.Table("ruler_applications").
+		Select("id, 'check'").
+		Where("id = ?", applicationToUpdate.Id).
+		Where("creator_refer = ?", user.Id).
+		Scan(&applicationToReturn).Error
+
+	err = tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToUpdate.Id).
+		Where("creator_refer = ?", user.Id).
+		First(&applicationToReturn).Error
+
+	return applicationToReturn, nil
+}
+
 // func (r *Repository) GetUserApplicationsWithKingdoms(user schema.User, applicationId string) (StructApplicationWithKingdoms, error) {
 // 	var applicationsToReturn StructApplicationWithKingdoms
 // 	var applications []schema.RullerApplication
