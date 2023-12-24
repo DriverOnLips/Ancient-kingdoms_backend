@@ -17,5 +17,4 @@ func (c *Client) WriteJWTToBlacklist(ctx context.Context, jwtStr string, jwtTTL 
 
 func (c *Client) CheckJWTInBlacklist(ctx context.Context, jwtStr string) error {
 	return c.client.Get(ctx, getJWTKey(jwtStr)).Err()
-	// если токена нет, то вернется ошибка not exists
 }

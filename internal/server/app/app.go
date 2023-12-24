@@ -26,6 +26,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const ASYNC_KEY = "secret"
+
 type Application struct {
 	config *config.Config
 	repo   *processing.Repository
@@ -71,8 +73,11 @@ func (a *Application) StartServer() {
 
 	a.r.GET("kingdoms", a.getKingdomsFeed)
 	a.r.GET("kingdom", a.getKingdom)
-	// a.r.GET("rulers", a.getRulers)
-	// a.r.GET("ruler", a.getRuler)
+	a.r.GET("applications", a.getApplications)
+	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
+
+	a.r.GET("async/application", a.asyncGetApplication)
+	a.r.PUT("async/application", a.asyncPutApplicationInfo)
 
 	// a.r.POST("kingdom/add", a.addKingdom)
 	// a.r.PUT("kingdom/edit", a.editKingdom)
@@ -98,8 +103,106 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
+func (a *Application) asyncGetApplication(ctx *gin.Context) {
+	key := ctx.GetHeader("AsyncKey")
+	if key != ASYNC_KEY {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "error getting async server key",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	applicationId := ctx.Query("id")
+	if applicationId == "" {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error no id provided",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	applications, err := a.repo.AsyncGetApplication(applicationId)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary applications: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdoms from application found",
+		Body:    applications,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) asyncPutApplicationInfo(ctx *gin.Context) {
+	key := ctx.GetHeader("AsyncKey")
+	if key != ASYNC_KEY {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "error getting async server key",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	var applicationToPut processing.AsyncStructApplication
+	if err := ctx.BindJSON(&applicationToPut); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err := a.repo.AsyncPutApplicationInfo(applicationToPut)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
-	kingdomName := ctx.Query("kingdom_name")
+	kingdomName := ctx.Query("kingdom_name") // TODO окно для пагинации
 
 	kingdoms, err := a.repo.GetKingdoms(kingdomName)
 	if err != nil {
@@ -141,7 +244,7 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 	}
 
 	var kingdom schema.Kingdom
-	kingdom.ID = uint(kingdomID)
+	kingdom.Id = uint(kingdomID)
 
 	kingdom, err = a.repo.GetKingdom(kingdom)
 	if err != nil {
@@ -165,21 +268,104 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-// func (a *Application) getRulers(ctx *gin.Context) {
-// 	var requestBody requestsModels.GetRulersRequest
-// 	if err := ctx.BindJSON(&requestBody); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
-// 		return
-// 	}
+func (a *Application) getApplications(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
 
-// 	rulers, err := a.repo.GetRulers(requestBody)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error getting rulers:"+err.Error())
-// 		return
-// 	}
+	user, err := a.repo.GetUserByName(myClaims.UserName)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
 
-// 	ctx.JSON(http.StatusFound, rulers)
-// }
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	applicationId := ctx.Query("id")
+
+	applications, err := a.repo.GetApplications(*user, applicationId)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary applications: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "applications found",
+		Body:    applications,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.UserName)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	applicationId := ctx.Query("id")
+	if applicationId == "" {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error no id provided",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	applications, err := a.repo.GetApplicationWithKingdoms(*user, applicationId)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary kingdoms form application: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdoms from application found",
+		Body:    applications,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
 
 // func (a *Application) getRuler(ctx *gin.Context) {
 // 	var ruler schema.Ruler
@@ -362,62 +548,68 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 // }
 
 func (a *Application) checkLogin(ctx *gin.Context) {
-	jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
-	if cookieErr != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error getting cookie",
-			Body:    nil,
-		}
+	// jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
+	// if cookieErr != nil {
+	// 	response := responseModels.ResponseDefault{
+	// 		Code:    500,
+	// 		Status:  "error",
+	// 		Message: "error getting cookie",
+	// 		Body:    nil,
+	// 	}
 
-		ctx.JSON(http.StatusInternalServerError, response)
+	// 	ctx.JSON(http.StatusInternalServerError, response)
+	// 	return
+	// }
+
+	// if !strings.HasPrefix(jwtStr, jwtPrefix) {
+	// 	response := responseModels.ResponseDefault{
+	// 		Code:    500,
+	// 		Status:  "error",
+	// 		Message: "error parsing jwt token: no prefix",
+	// 		Body:    nil,
+	// 	}
+
+	// 	ctx.JSON(http.StatusInternalServerError, response)
+	// 	return
+	// }
+
+	// jwtStr = jwtStr[len(jwtPrefix):]
+	// err := a.redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
+	// if err == nil {
+	// 	response := responseModels.ResponseDefault{
+	// 		Code:    200,
+	// 		Status:  "ok",
+	// 		Message: "not authorized: token in black list",
+	// 		Body:    nil,
+	// 	}
+
+	// 	ctx.JSON(http.StatusOK, response)
+	// 	return
+	// }
+
+	// token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+	// 	return []byte(a.config.JWT.Token), nil
+	// })
+
+	// if err != nil {
+	// 	response := responseModels.ResponseDefault{
+	// 		Code:    500,
+	// 		Status:  "error",
+	// 		Message: "error parsing jwt token: error parsing with claims",
+	// 		Body:    nil,
+	// 	}
+
+	// 	ctx.JSON(http.StatusInternalServerError, response)
+	// 	return
+	// }
+
+	// myClaims := token.Claims.(*serverModels.JWTClaims)
+
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
-
-	if !strings.HasPrefix(jwtStr, jwtPrefix) {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error parsing jwt token: no prefix",
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusInternalServerError, response)
-		return
-	}
-
-	jwtStr = jwtStr[len(jwtPrefix):]
-	err := a.redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
-	if err == nil {
-		response := responseModels.ResponseDefault{
-			Code:    200,
-			Status:  "ok",
-			Message: "not authorized: token in black list",
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusOK, response)
-		return
-	}
-
-	token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(a.config.JWT.Token), nil
-	})
-
-	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error parsing jwt token: error parsing with claims",
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusInternalServerError, response)
-		return
-	}
-
-	myClaims := token.Claims.(*serverModels.JWTClaims)
 
 	assignedRoles := [...]role.Role{role.Unknown, role.Buyer, role.Manager, role.Admin}
 
@@ -428,8 +620,8 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 				Status:  "ok",
 				Message: "authorized",
 				Body: map[string]interface{}{
-					"user_role": oneOfAssignedRole,
-					"user_name": myClaims.UserName,
+					"userRole": oneOfAssignedRole,
+					"userName": myClaims.UserName,
 				},
 			}
 
@@ -438,7 +630,7 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 		}
 	}
 
-	response := responseModels.ResponseDefault{
+	response = responseModels.ResponseDefault{
 		Code:    200,
 		Status:  "ok",
 		Message: "not authorized: no role found",
@@ -522,8 +714,8 @@ func (a *Application) login(ctx *gin.Context) {
 			Status:  "ok",
 			Message: "user session starts successfully",
 			Body: map[string]interface{}{
-				"user_role": user.Role,
-				"user_name": user.Name,
+				"userRole": user.Role,
+				"userName": user.Name,
 			},
 		}
 

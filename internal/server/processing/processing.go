@@ -3,12 +3,21 @@ package processing
 import (
 	"errors"
 	"fmt"
+	"kingdoms/internal/config"
 	"kingdoms/internal/database/schema"
+	"kingdoms/internal/server/models/responseModels"
+	"kingdoms/internal/server/models/serverModels"
+	"kingdoms/internal/server/redis"
+	"strings"
 
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+const jwtPrefix = "Bearer"
 
 type Repository struct {
 	db *gorm.DB
@@ -25,6 +34,93 @@ func New(connect string) (*Repository, error) {
 	}, nil
 }
 
+func (r *Repository) FoundUserFromHeader(ctx *gin.Context, redis *redis.Client, config *config.Config) (*serverModels.JWTClaims, responseModels.ResponseDefault) {
+	jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
+	if cookieErr != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting cookie",
+			Body:    nil,
+		}
+
+		return nil, response
+	}
+
+	if !strings.HasPrefix(jwtStr, jwtPrefix) {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error parsing jwt token: no prefix",
+			Body:    nil,
+		}
+
+		return nil, response
+	}
+
+	jwtStr = jwtStr[len(jwtPrefix):]
+	err := redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
+	if err == nil {
+		response := responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "not authorized: token in black list",
+			Body:    nil,
+		}
+
+		return nil, response
+	}
+
+	token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(config.JWT.Token), nil
+	})
+
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error parsing jwt token: error parsing with claims",
+			Body:    nil,
+		}
+
+		return nil, response
+	}
+
+	return token.Claims.(*serverModels.JWTClaims), responseModels.ResponseDefault{}
+}
+
+func (r *Repository) AsyncGetApplication(applicationId string) (AsyncStructApplication, error) {
+	var applicationToReturn AsyncStructApplication
+
+	var tx *gorm.DB = r.db
+	err := tx.Table("ruler_applications").
+		Select("id, 'check'").
+		Where("id = ?", applicationId).
+		Scan(&applicationToReturn).Error
+	if err != nil {
+		return AsyncStructApplication{}, err
+	}
+
+	if applicationToReturn == (AsyncStructApplication{}) {
+		return AsyncStructApplication{}, errors.New("application not found")
+	}
+
+	return applicationToReturn, nil
+}
+
+func (r *Repository) AsyncPutApplicationInfo(applicationToPut AsyncStructApplication) error {
+	var tx *gorm.DB = r.db
+
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToPut.Id).
+		Update("check", applicationToPut.Check).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Repository) GetKingdoms(kingdomName string) ([]schema.Kingdom, error) {
 	kingdomsToReturn := []schema.Kingdom{}
 
@@ -35,7 +131,7 @@ func (r *Repository) GetKingdoms(kingdomName string) ([]schema.Kingdom, error) {
 		return []schema.Kingdom{}, err
 	}
 
-	if kingdomsToReturn == nil {
+	if len(kingdomsToReturn) == 0 {
 		return []schema.Kingdom{}, errors.New("no necessary kingdoms found")
 	}
 
@@ -52,6 +148,118 @@ func (r *Repository) GetKingdom(kingdom schema.Kingdom) (schema.Kingdom, error) 
 		return kingdomToReturn, nil
 	}
 }
+
+func (r *Repository) GetApplications(user schema.User, applicationId string) ([]schema.RulerApplication, error) {
+	var applicationsToReturn []schema.RulerApplication
+
+	var tx *gorm.DB = r.db
+
+	if applicationId == "" {
+		err := tx.Where("creator_refer = ?", user.Id).Find(&applicationsToReturn).Error
+		if err != nil {
+			return []schema.RulerApplication{}, err
+		}
+
+		if len(applicationsToReturn) == 0 {
+			return []schema.RulerApplication{}, errors.New("no necessary ruler applications found")
+		}
+
+		return applicationsToReturn, nil
+	}
+
+	err := tx.Where("id = ?", applicationId).Find(&applicationsToReturn).Error
+	if err != nil {
+		return []schema.RulerApplication{}, err
+	}
+
+	if len(applicationsToReturn) == 0 {
+		return []schema.RulerApplication{}, errors.New("no necessary ruler applications found")
+	}
+
+	return applicationsToReturn, nil
+}
+
+func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId string) (StructApplicationWithKingdoms, error) {
+	_, err := r.GetApplications(user, "")
+	if err != nil {
+		return StructApplicationWithKingdoms{}, err
+	}
+
+	var applicationToReturn StructApplicationWithKingdoms
+	applicationToReturn.ApplicationId = applicationId
+	var kingdom2Application []schema.Kingdom2Application
+
+	var tx *gorm.DB = r.db
+
+	err = tx.Where("application_refer = ?", applicationId).Find(&kingdom2Application).Error
+	if err != nil {
+		return StructApplicationWithKingdoms{}, err
+	}
+
+	if len(kingdom2Application) == 0 {
+		return StructApplicationWithKingdoms{}, errors.New("kingdom2Application from this application not found")
+	}
+
+	for i := 0; i < len(kingdom2Application); i++ {
+		var nestedKingdom schema.Kingdom
+		err = tx.Where("id = ?", kingdom2Application[i].KingdomRefer).Find(&nestedKingdom).Error
+		if err != nil {
+			return StructApplicationWithKingdoms{}, err
+		}
+
+		var kingdomFromApplication KingdomFromApplication
+		kingdomFromApplication.Kingdom = nestedKingdom
+		kingdomFromApplication.From = kingdom2Application[i].From
+		kingdomFromApplication.To = kingdom2Application[i].To
+
+		applicationToReturn.Kingdoms = append(applicationToReturn.Kingdoms, kingdomFromApplication)
+	}
+
+	return applicationToReturn, nil
+}
+
+// func (r *Repository) GetUserApplicationsWithKingdoms(user schema.User, applicationId string) (StructApplicationWithKingdoms, error) {
+// 	var applicationsToReturn StructApplicationWithKingdoms
+// 	var applications []schema.RullerApplication
+// 	var kingdom2Application []schema.Kingdom2Application
+
+// 	var tx *gorm.DB = r.db
+
+// 	err := tx.Where("creator_refer = ?", user.Id).Find(&applications).Error
+// 	if err != nil {
+// 		return StructApplicationWithKingdoms{}, err
+// 	}
+
+// 	if len(applications) == 0 {
+// 		return StructApplicationWithKingdoms{}, errors.New("application not found")
+// 	}
+
+// 	err = tx.Where("application_refer = ?", applicationId).Find(&kingdom2Application).Error
+// 	if err != nil {
+// 		return StructApplicationWithKingdoms{}, err
+// 	}
+
+// 	if len(kingdom2Application) == 0 {
+// 		return StructApplicationWithKingdoms{}, errors.New("application not found")
+// 	}
+
+// 	for i := 0; i < len(kingdom2Application); i++ {
+// 		var nestedKingdom schema.Kingdom
+// 		err = tx.Where("id = ?", kingdom2Application[i].KingdomRefer).Find(&nestedKingdom).Error
+// 		if err != nil {
+// 			return StructApplicationWithKingdoms{}, err
+// 		}
+
+// 		var kingdomFromApplication KingdomFromApplication
+// 		kingdomFromApplication.Kingdom = nestedKingdom
+// 		kingdomFromApplication.From = kingdom2Application[i].From
+// 		kingdomFromApplication.To = kingdom2Application[i].To
+
+// 		applicationsToReturn.Kingdoms = append(applicationsToReturn.Kingdoms, kingdomFromApplication)
+// 	}
+
+// 	return applicationsToReturn, nil
+// }
 
 // func (r *Repository) GetRulers(requestBody requestsModels.GetRulersRequest) ([]schema.Ruler, error) {
 // 	var rulersToReturn []schema.Ruler

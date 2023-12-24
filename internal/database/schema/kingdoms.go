@@ -8,8 +8,8 @@ import (
 )
 
 type Kingdom struct {
-	ID          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
-	Name        string `gorm:"type:varchar(50);unique;not null"`
+	Id          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
+	Name        string `gorm:"type:varchar(100);unique;not null"`
 	Area        int    `gorm:"not null"`
 	Capital     string `gorm:"type:varchar(50);not null"`
 	Image       string `gorm:"type:bytea"`
@@ -18,29 +18,33 @@ type Kingdom struct {
 }
 
 type User struct {
-	ID       uint      `gorm:"primaryKey;AUTO_INCREMENT"`
+	Id       uint      `gorm:"primaryKey;AUTO_INCREMENT"`
 	UUID     uuid.UUID `gorm:"type:uuid"`
 	Name     string    `json:"name"`
 	Role     role.Role `sql:"type:string"`
 	Password string
 }
 
-type Campaign struct {
-	ID          uint           `gorm:"primaryKey;AUTO_INCREMENT"`
-	UserRefer   int            `gorm:"not null"`
-	User        User           `gorm:"foreignKey:UserRefer"`
-	KingName    string         `gorm:"type:varchar(50);unique;not null"`
-	State       string         `gorm:"type:varchar(50);not null"`
-	Development datatypes.Date `gorm:"not null"`
-	Begin       datatypes.Date
-	End         datatypes.Date
+type RulerApplication struct {
+	Id             uint           `gorm:"primaryKey;AUTO_INCREMENT"`
+	State          string         `gorm:"type:varchar(50);not null"`
+	DateCreate     datatypes.Date `gorm:"not null"`
+	DateSend       datatypes.Date
+	DateComplete   datatypes.Date
+	Ruler          string `gorm:"type:varchar(50);not null"`
+	CreatorRefer   int    `gorm:"not null"`
+	Creator        User   `gorm:"foreignKey:CreatorRefer"`
+	ModeratorRefer int    `gorm:"not null"`
+	Moderator      User   `gorm:"foreignKey:ModeratorRefer"`
+	Check          bool   `gorm:"type:boolean"`
 }
 
-type Kingdom4campaign struct {
-	ID            uint     `gorm:"primaryKey;AUTO_INCREMENT"`
-	CampaignRefer int      `gorm:"not null"`
-	Campaign      Campaign `gorm:"foreignKey:CampaignRefer"`
-	KingdomRefer  int      `gorm:"not null"`
-	Kingdom       Kingdom  `gorm:"foreignKey:KingdomRefer"`
-	NumKingdoms   int      `gorm:"not null"`
+type Kingdom2Application struct {
+	Id               uint             `gorm:"primaryKey;AUTO_INCREMENT"`
+	KingdomRefer     int              `gorm:"not null"`
+	Kingdom          Kingdom          `gorm:"foreignKey:KingdomRefer"`
+	ApplicationRefer int              `gorm:"not null"`
+	Application      RulerApplication `gorm:"foreignKey:ApplicationRefer"`
+	From             datatypes.Date   `gorm:"not null"`
+	To               datatypes.Date   `gorm:"not null"`
 }
