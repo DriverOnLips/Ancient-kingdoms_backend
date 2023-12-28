@@ -62,8 +62,8 @@ func (r *Repository) FoundUserFromHeader(ctx *gin.Context, redis *redis.Client, 
 	err := redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
 	if err == nil {
 		response := responseModels.ResponseDefault{
-			Code:    200,
-			Status:  "ok",
+			Code:    403,
+			Status:  "error",
 			Message: "not authorized: token in black list",
 			Body:    nil,
 		}
@@ -79,7 +79,7 @@ func (r *Repository) FoundUserFromHeader(ctx *gin.Context, redis *redis.Client, 
 		response := responseModels.ResponseDefault{
 			Code:    500,
 			Status:  "error",
-			Message: "error parsing jwt token: error parsing with claims",
+			Message: "error parsing jwt token: error parsing with claims: " + err.Error(),
 			Body:    nil,
 		}
 

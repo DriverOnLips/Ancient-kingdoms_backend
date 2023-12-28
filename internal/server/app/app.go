@@ -299,7 +299,7 @@ func (a *Application) getApplications(ctx *gin.Context) {
 		return
 	}
 
-	user, err := a.repo.GetUserByName(myClaims.UserName)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -343,7 +343,7 @@ func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 		return
 	}
 
-	user, err := a.repo.GetUserByName(myClaims.UserName)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -398,7 +398,7 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 		return
 	}
 
-	user, err := a.repo.GetUserByName(myClaims.UserName)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -630,63 +630,6 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 // }
 
 func (a *Application) checkLogin(ctx *gin.Context) {
-	// jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
-	// if cookieErr != nil {
-	// 	response := responseModels.ResponseDefault{
-	// 		Code:    500,
-	// 		Status:  "error",
-	// 		Message: "error getting cookie",
-	// 		Body:    nil,
-	// 	}
-
-	// 	ctx.JSON(http.StatusInternalServerError, response)
-	// 	return
-	// }
-
-	// if !strings.HasPrefix(jwtStr, jwtPrefix) {
-	// 	response := responseModels.ResponseDefault{
-	// 		Code:    500,
-	// 		Status:  "error",
-	// 		Message: "error parsing jwt token: no prefix",
-	// 		Body:    nil,
-	// 	}
-
-	// 	ctx.JSON(http.StatusInternalServerError, response)
-	// 	return
-	// }
-
-	// jwtStr = jwtStr[len(jwtPrefix):]
-	// err := a.redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
-	// if err == nil {
-	// 	response := responseModels.ResponseDefault{
-	// 		Code:    200,
-	// 		Status:  "ok",
-	// 		Message: "not authorized: token in black list",
-	// 		Body:    nil,
-	// 	}
-
-	// 	ctx.JSON(http.StatusOK, response)
-	// 	return
-	// }
-
-	// token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-	// 	return []byte(a.config.JWT.Token), nil
-	// })
-
-	// if err != nil {
-	// 	response := responseModels.ResponseDefault{
-	// 		Code:    500,
-	// 		Status:  "error",
-	// 		Message: "error parsing jwt token: error parsing with claims",
-	// 		Body:    nil,
-	// 	}
-
-	// 	ctx.JSON(http.StatusInternalServerError, response)
-	// 	return
-	// }
-
-	// myClaims := token.Claims.(*serverModels.JWTClaims)
-
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
 		ctx.JSON(response.Code, response)
@@ -702,8 +645,9 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 				Status:  "ok",
 				Message: "authorized",
 				Body: map[string]interface{}{
-					"userRole": oneOfAssignedRole,
-					"userName": myClaims.UserName,
+					"Id":   myClaims.Id,
+					"Name": myClaims.Name,
+					"Role": oneOfAssignedRole,
 				},
 			}
 
@@ -761,8 +705,9 @@ func (a *Application) login(ctx *gin.Context) {
 				Issuer:    "bitop-admin",
 			},
 			UserUUID: uuid.New(),
+			Id:       user.Id,
+			Name:     user.Name,
 			Role:     user.Role,
-			UserName: user.Name,
 		})
 		if token == nil {
 			response := responseModels.ResponseDefault{
@@ -796,8 +741,9 @@ func (a *Application) login(ctx *gin.Context) {
 			Status:  "ok",
 			Message: "user session starts successfully",
 			Body: map[string]interface{}{
-				"userRole": user.Role,
-				"userName": user.Name,
+				"Id":   user.Id,
+				"Role": user.Role,
+				"Name": user.Name,
 			},
 		}
 
@@ -925,7 +871,7 @@ func (a *Application) logout(ctx *gin.Context) {
 		response := responseModels.ResponseDefault{
 			Code:    500,
 			Status:  "error",
-			Message: "error parsing jwt token: error parsing with claims",
+			Message: "error parsing jwt token: error parsing with claims: " + err.Error(),
 			Body:    nil,
 		}
 

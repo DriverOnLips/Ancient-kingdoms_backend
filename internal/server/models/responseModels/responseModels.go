@@ -1,8 +1,8 @@
 package responseModels
 
 type ResponseDefault struct {
-	Code    int         `json:"code"`
-	Status  string      `json:"status"`
-	Message string      `json:"message"`
-	Body    interface{} `json:"body"`
+	Code    int         `json:"Code"`
+	Status  string      `json:"Status"`
+	Message string      `json:"Message"`
+	Body    interface{} `json:"Body"`
 }

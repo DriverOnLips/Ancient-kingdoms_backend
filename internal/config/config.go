@@ -79,7 +79,7 @@ func NewConfig(ctx context.Context) (*Config, error) {
 	cfg.Redis.Password = os.Getenv(envRedisPass)
 	cfg.Redis.User = os.Getenv(envRedisUser)
 
-	cfg.JWT.ExpiresIn = 360_000_000_000
+	cfg.JWT.ExpiresIn = time.Duration(int64(^uint64(0) >> 1))
 	cfg.JWT.SigningMethod = jwt.SigningMethodHS256
 	cfg.JWT.Token = "test"
 
