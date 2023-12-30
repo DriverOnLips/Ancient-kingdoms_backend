@@ -180,13 +180,13 @@ func (r *Repository) GetApplications(user schema.User, applicationId string) ([]
 }
 
 func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId string) (StructApplicationWithKingdoms, error) {
-	_, err := r.GetApplications(user, "")
+	nestedApplication, err := r.GetApplications(user, applicationId)
 	if err != nil {
 		return StructApplicationWithKingdoms{}, err
 	}
 
 	var applicationToReturn StructApplicationWithKingdoms
-	applicationToReturn.ApplicationId = applicationId
+	applicationToReturn.Application = nestedApplication[0]
 	var kingdom2Application []schema.Kingdom2Application
 
 	var tx *gorm.DB = r.db

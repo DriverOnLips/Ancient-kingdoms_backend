@@ -122,7 +122,7 @@ func (a *Application) asyncGetApplication(ctx *gin.Context) {
 		return
 	}
 
-	applicationId := ctx.Query("id")
+	applicationId := ctx.Query("Id")
 	if applicationId == "" {
 		response := responseModels.ResponseDefault{
 			Code:    400,
@@ -226,7 +226,7 @@ func (a *Application) sendRequestToAsyncServer(applicationToSend processing.Asyn
 }
 
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
-	kingdomName := ctx.Query("kingdom_name") // TODO окно для пагинации
+	kingdomName := ctx.Query("Kingdom_name") // TODO окно для пагинации
 
 	kingdoms, err := a.repo.GetKingdoms(kingdomName)
 	if err != nil {
@@ -253,7 +253,7 @@ func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 }
 
 func (a *Application) getKingdom(ctx *gin.Context) {
-	kingdomID, err := strconv.Atoi(ctx.Query("id"))
+	kingdomID, err := strconv.Atoi(ctx.Query("Id"))
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -312,7 +312,7 @@ func (a *Application) getApplications(ctx *gin.Context) {
 		return
 	}
 
-	applicationId := ctx.Query("id")
+	applicationId := ctx.Query("Id")
 
 	applications, err := a.repo.GetApplications(*user, applicationId)
 	if err != nil {
@@ -356,7 +356,7 @@ func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 		return
 	}
 
-	applicationId := ctx.Query("id")
+	applicationId := ctx.Query("Id")
 	if applicationId == "" {
 		response := responseModels.ResponseDefault{
 			Code:    400,

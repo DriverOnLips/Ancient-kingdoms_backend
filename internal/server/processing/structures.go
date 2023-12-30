@@ -7,8 +7,8 @@ import (
 )
 
 type StructApplicationWithKingdoms struct {
-	ApplicationId string
-	Kingdoms      []KingdomFromApplication
+	Application schema.RulerApplication
+	Kingdoms    []KingdomFromApplication
 }
 
 type KingdomFromApplication struct {
