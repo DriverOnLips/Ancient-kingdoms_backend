@@ -197,7 +197,8 @@ func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId 
 	}
 
 	if len(kingdom2Application) == 0 {
-		return StructApplicationWithKingdoms{}, errors.New("kingdom2Application from this application not found")
+		// return StructApplicationWithKingdoms{}, errors.New("kingdom2Application from this application not found")
+		return applicationToReturn, nil
 	}
 
 	for i := 0; i < len(kingdom2Application); i++ {
@@ -254,6 +255,70 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 		First(&applicationToReturn).Error
 
 	return applicationToReturn, nil
+}
+
+func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
+	var tx *gorm.DB = r.db
+
+	var app schema.RulerApplication
+
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", kingdomAddToApplication.ApplicationId).
+		Where("creator_refer = ?", user.Id).
+		First(&app).Error
+	if err != nil {
+		return err
+	}
+	if app == (schema.RulerApplication{}) {
+		return errors.New("no necessary application found")
+	}
+
+	var kingdom2Application = schema.Kingdom2Application{
+		ApplicationRefer: int(kingdomAddToApplication.ApplicationId),
+		KingdomRefer:     int(kingdomAddToApplication.KingdomId),
+		From:             kingdomAddToApplication.From,
+		To:               kingdomAddToApplication.To,
+	}
+
+	err = r.db.Create(&kingdom2Application).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) DeleteKingdomFromApplication(user schema.User,
+	kingdomToDeleteFromApplication DeleteKingdomFromApplication) error {
+
+	var tx *gorm.DB = r.db
+
+	var app schema.RulerApplication
+
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", kingdomToDeleteFromApplication.ApplicationId).
+		Where("creator_refer = ?", user.Id).
+		First(&app).Error
+	if err != nil {
+		return err
+	}
+	if app == (schema.RulerApplication{}) {
+		return errors.New("no necessary application found")
+	}
+
+	var kingdom2Application = schema.Kingdom2Application{
+		ApplicationRefer: int(kingdomToDeleteFromApplication.ApplicationId),
+		KingdomRefer:     int(kingdomToDeleteFromApplication.KingdomId),
+	}
+
+	err = r.db.Where("application_refer = ? AND kingdom_refer = ?",
+		kingdom2Application.ApplicationRefer, kingdom2Application.KingdomRefer).
+		Delete(&kingdom2Application).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // func (r *Repository) GetUserApplicationsWithKingdoms(user schema.User, applicationId string) (StructApplicationWithKingdoms, error) {

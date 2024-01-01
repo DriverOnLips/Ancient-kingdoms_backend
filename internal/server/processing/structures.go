@@ -26,3 +26,15 @@ type ApplicationToUpdate struct {
 	Id    uint
 	State string
 }
+
+type KingdomAddToApplication struct {
+	ApplicationId uint
+	KingdomId     uint
+	From          datatypes.Date
+	To            datatypes.Date
+}
+
+type DeleteKingdomFromApplication struct {
+	ApplicationId uint
+	KingdomId     uint
+}
