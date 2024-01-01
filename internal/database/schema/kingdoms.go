@@ -26,17 +26,17 @@ type User struct {
 }
 
 type RulerApplication struct {
-	Id             uint           `gorm:"primaryKey;AUTO_INCREMENT"`
-	State          string         `gorm:"type:varchar(50);not null"`
-	DateCreate     datatypes.Date `gorm:"not null"`
-	DateSend       datatypes.Date
-	DateComplete   datatypes.Date
-	Ruler          string `gorm:"type:varchar(50);not null"`
-	CreatorRefer   int    `gorm:"not null"`
-	Creator        User   `gorm:"foreignKey:CreatorRefer"`
-	ModeratorRefer int    `gorm:"not null"`
-	Moderator      User   `gorm:"foreignKey:ModeratorRefer"`
-	Check          bool   `gorm:"type:boolean"`
+	Id           uint           `gorm:"primaryKey;AUTO_INCREMENT"`
+	State        string         `gorm:"type:varchar(50);not null"`
+	DateCreate   datatypes.Date `gorm:"not null"`
+	DateSend     datatypes.Date
+	DateComplete datatypes.Date
+	Ruler        string `gorm:"type:varchar(50);not null"`
+	CreatorRefer int    `gorm:"not null"`
+	Creator      User   `gorm:"foreignKey:CreatorRefer"`
+	// ModeratorRefer int    `gorm:"not null"`
+	// Moderator      User   `gorm:"foreignKey:ModeratorRefer"`
+	Check bool `gorm:"type:boolean"`
 }
 
 type Kingdom2Application struct {

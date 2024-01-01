@@ -9,10 +9,12 @@ import (
 	"kingdoms/internal/server/models/serverModels"
 	"kingdoms/internal/server/redis"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -217,6 +219,23 @@ func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId 
 	}
 
 	return applicationToReturn, nil
+}
+
+func (r *Repository) CreateApplication(user schema.User) (schema.RulerApplication, error) {
+	application := schema.RulerApplication{
+		Creator:    user,
+		State:      "В разработке",
+		DateCreate: datatypes.Date(time.Now()),
+	}
+
+	var tx *gorm.DB = r.db
+
+	err := tx.Create(&application).Error
+	if err != nil {
+		return schema.RulerApplication{}, err
+	}
+
+	return application, nil
 }
 
 func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpdate ApplicationToUpdate) (AsyncStructApplication, error) {

@@ -78,6 +78,7 @@ func (a *Application) StartServer() {
 	a.r.GET("kingdom", a.getKingdom)
 	a.r.GET("applications", a.getApplications)
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
+	a.r.POST("application/create", a.createApplication)
 
 	a.r.PUT("application/status", a.updateApplicationStatus)
 	a.r.PUT("application/add_kingdom", a.addKingdomToApplication)
@@ -372,7 +373,7 @@ func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 		return
 	}
 
-	applications, err := a.repo.GetApplicationWithKingdoms(*user, applicationId)
+	application, err := a.repo.GetApplicationWithKingdoms(*user, applicationId)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -388,7 +389,92 @@ func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 		Code:    200,
 		Status:  "ok",
 		Message: "kingdoms from application found",
-		Body:    applications,
+		Body:    application,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) createApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var applicationToAdd processing.KingdomAddToApplication
+	if err := ctx.BindJSON(&applicationToAdd); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	application, err := a.repo.CreateApplication(*user)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error creating application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	applicationToAdd.ApplicationId = application.Id
+
+	err = a.repo.AddKingdomToApplication(*user, applicationToAdd)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error adding kingdom to application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	applicationWithKingdoms, err := a.repo.GetApplicationWithKingdoms(*user,
+		strconv.Itoa(int(applicationToAdd.ApplicationId)))
+
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary kingdoms from application: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdoms from application found",
+		Body:    applicationWithKingdoms,
 	}
 
 	ctx.JSON(http.StatusOK, response)
