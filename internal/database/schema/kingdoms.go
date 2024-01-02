@@ -28,12 +28,12 @@ type User struct {
 type RulerApplication struct {
 	Id           uint           `gorm:"primaryKey;AUTO_INCREMENT"`
 	State        string         `gorm:"type:varchar(50);not null"`
-	DateCreate   datatypes.Date `gorm:"not null"`
+	DateCreate   datatypes.Date `gorm:"not null;default:CURRENT_DATE"`
 	DateSend     datatypes.Date
 	DateComplete datatypes.Date
 	Ruler        string `gorm:"type:varchar(50);not null"`
 	CreatorRefer int    `gorm:"not null"`
-	Creator      User   `gorm:"foreignKey:CreatorRefer"`
+	Creator      User   `gorm:"foreignKey:CreatorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	// ModeratorRefer int    `gorm:"not null"`
 	// Moderator      User   `gorm:"foreignKey:ModeratorRefer"`
 	Check bool `gorm:"type:boolean"`
@@ -42,9 +42,9 @@ type RulerApplication struct {
 type Kingdom2Application struct {
 	Id               uint             `gorm:"primaryKey;AUTO_INCREMENT"`
 	KingdomRefer     int              `gorm:"not null"`
-	Kingdom          Kingdom          `gorm:"foreignKey:KingdomRefer"`
+	Kingdom          Kingdom          `gorm:"foreignKey:KingdomRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	ApplicationRefer int              `gorm:"not null"`
-	Application      RulerApplication `gorm:"foreignKey:ApplicationRefer"`
+	Application      RulerApplication `gorm:"foreignKey:ApplicationRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	From             datatypes.Date   `gorm:"not null"`
 	To               datatypes.Date   `gorm:"not null"`
 }

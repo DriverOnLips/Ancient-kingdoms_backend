@@ -253,12 +253,59 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 		return AsyncStructApplication{}, errors.New("no necessary application found")
 	}
 
-	err = tx.Model(&schema.RulerApplication{}).
-		Where("id = ?", applicationToUpdate.Id).
-		Where("creator_refer = ?", user.Id).
-		Update("state", applicationToUpdate.State).Error
-	if err != nil {
-		return AsyncStructApplication{}, err
+	switch applicationToUpdate.State {
+	case "На рассмотрении":
+		err = tx.Model(&schema.RulerApplication{}).
+			Where("id = ?", applicationToUpdate.Id).
+			Where("creator_refer = ?", user.Id).
+			Updates(map[string]interface{}{
+				"state":     applicationToUpdate.State,
+				"date_send": datatypes.Date(time.Now()),
+			}).Error
+		if err != nil {
+			return AsyncStructApplication{}, err
+		}
+
+		break
+
+	case "Одобрена":
+		err = tx.Model(&schema.RulerApplication{}).
+			Where("id = ?", applicationToUpdate.Id).
+			Where("creator_refer = ?", user.Id).
+			Updates(map[string]interface{}{
+				"state":         applicationToUpdate.State,
+				"date_complete": datatypes.Date(time.Now()),
+			}).Error
+		if err != nil {
+			return AsyncStructApplication{}, err
+		}
+		break
+
+	case "Отклонена":
+		err = tx.Model(&schema.RulerApplication{}).
+			Where("id = ?", applicationToUpdate.Id).
+			Where("creator_refer = ?", user.Id).
+			Updates(map[string]interface{}{
+				"state":         applicationToUpdate.State,
+				"date_complete": datatypes.Date(time.Now()),
+			}).Error
+		if err != nil {
+			return AsyncStructApplication{}, err
+		}
+		break
+
+	case "Удалена":
+		err = tx.Model(&schema.RulerApplication{}).
+			Where("id = ?", applicationToUpdate.Id).
+			Where("creator_refer = ?", user.Id).
+			Update("state", applicationToUpdate.State).Error
+		if err != nil {
+			return AsyncStructApplication{}, err
+		}
+		break
+
+	default:
+		break
 	}
 
 	var applicationToReturn AsyncStructApplication
@@ -333,6 +380,17 @@ func (r *Repository) DeleteKingdomFromApplication(user schema.User,
 	err = r.db.Where("application_refer = ? AND kingdom_refer = ?",
 		kingdom2Application.ApplicationRefer, kingdom2Application.KingdomRefer).
 		Delete(&kingdom2Application).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) DeleteApplication(user schema.User, applicationToDelete schema.RulerApplication) error {
+	var tx *gorm.DB = r.db
+
+	err := tx.Where("id = ?", applicationToDelete.Id).Delete(&schema.RulerApplication{}).Error
 	if err != nil {
 		return err
 	}

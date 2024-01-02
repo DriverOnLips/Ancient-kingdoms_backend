@@ -84,6 +84,7 @@ func (a *Application) StartServer() {
 	a.r.PUT("application/add_kingdom", a.addKingdomToApplication)
 
 	a.r.DELETE("application/delete_kingdom", a.deleteKingdomFromApplication)
+	a.r.DELETE("application/delete", a.deleteApplication)
 
 	a.r.GET("async/application", a.asyncGetApplication)
 	a.r.PUT("async/application", a.asyncPutApplicationInfo)
@@ -644,6 +645,62 @@ func (a *Application) deleteKingdomFromApplication(ctx *gin.Context) {
 		Code:    200,
 		Status:  "ok",
 		Message: "kingdom deleted from application successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) deleteApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var applicatinToDelete schema.RulerApplication
+	if err := ctx.BindJSON(&applicatinToDelete); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.DeleteApplication(*user, applicatinToDelete)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error deleting application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "application deleted successfully",
 		Body:    nil,
 	}
 
