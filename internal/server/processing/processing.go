@@ -157,7 +157,9 @@ func (r *Repository) GetApplications(user schema.User, applicationId string) ([]
 	var tx *gorm.DB = r.db
 
 	if applicationId == "" {
-		err := tx.Where("creator_refer = ?", user.Id).Find(&applicationsToReturn).Error
+		err := tx.Where("creator_refer = ? and state != 'Удалена'", user.Id).
+			Order("id").
+			Find(&applicationsToReturn).Error
 		if err != nil {
 			return []schema.RulerApplication{}, err
 		}
@@ -323,6 +325,21 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 	return applicationToReturn, nil
 }
 
+func (r *Repository) UpdateApplication(user schema.User,
+	applicationToUpdate schema.RulerApplication) error {
+
+	var tx *gorm.DB = r.db
+
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToUpdate.Id).
+		Update("ruler", applicationToUpdate.Ruler).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
 	var tx *gorm.DB = r.db
 
@@ -347,6 +364,40 @@ func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToAppli
 	}
 
 	err = r.db.Create(&kingdom2Application).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdateKingdomFromApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
+	var tx *gorm.DB = r.db
+
+	var app schema.RulerApplication
+
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", kingdomAddToApplication.ApplicationId).
+		Where("creator_refer = ?", user.Id).
+		First(&app).Error
+	if err != nil {
+		return err
+	}
+	if app == (schema.RulerApplication{}) {
+		return errors.New("no necessary application found")
+	}
+
+	var kingdom2Application = schema.Kingdom2Application{
+		ApplicationRefer: int(kingdomAddToApplication.ApplicationId),
+		KingdomRefer:     int(kingdomAddToApplication.KingdomId),
+		From:             kingdomAddToApplication.From,
+		To:               kingdomAddToApplication.To,
+	}
+
+	err = r.db.Model(&schema.Kingdom2Application{}).
+		Where("application_refer = ? AND kingdom_refer = ?",
+			kingdom2Application.ApplicationRefer, kingdom2Application.KingdomRefer).
+		Updates(kingdom2Application).Error
 	if err != nil {
 		return err
 	}
