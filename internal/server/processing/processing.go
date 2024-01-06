@@ -183,6 +183,26 @@ func (r *Repository) GetApplications(user schema.User, applicationId string) ([]
 	return applicationsToReturn, nil
 }
 
+func (r *Repository) GetAllApplications() ([]schema.RulerApplication, error) {
+	var applicationsToReturn []schema.RulerApplication
+
+	err := r.db.
+		Where("state != 'Удалена'").
+		Order("id").
+		Preload("Creator").
+		Find(&applicationsToReturn).Error
+
+	if err != nil {
+		return []schema.RulerApplication{}, err
+	}
+
+	if len(applicationsToReturn) == 0 {
+		return []schema.RulerApplication{}, errors.New("no necessary ruler applications found")
+	}
+
+	return applicationsToReturn, nil
+}
+
 func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId string) (StructApplicationWithKingdoms, error) {
 	nestedApplication, err := r.GetApplications(user, applicationId)
 	if err != nil {

@@ -78,6 +78,8 @@ func (a *Application) StartServer() {
 	a.r.GET("kingdom", a.getKingdom)
 	a.r.GET("applications", a.getApplications)
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
+	a.r.GET("applications/all", a.getAllApplications)
+
 	a.r.POST("application/create", a.createApplication)
 
 	a.r.PUT("application/status", a.updateApplicationStatus)
@@ -334,6 +336,29 @@ func (a *Application) getApplications(ctx *gin.Context) {
 	}
 
 	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "applications found",
+		Body:    applications,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) getAllApplications(ctx *gin.Context) {
+	applications, err := a.repo.GetAllApplications()
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary applications: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response := responseModels.ResponseDefault{
 		Code:    200,
 		Status:  "ok",
 		Message: "applications found",

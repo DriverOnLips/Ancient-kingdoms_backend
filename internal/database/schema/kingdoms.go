@@ -20,7 +20,7 @@ type Kingdom struct {
 type User struct {
 	Id       uint      `gorm:"primaryKey;AUTO_INCREMENT"`
 	UUID     uuid.UUID `gorm:"type:uuid"`
-	Name     string    `json:"name"`
+	Name     string    `json:"Name"`
 	Role     role.Role `sql:"type:string"`
 	Password string
 }
