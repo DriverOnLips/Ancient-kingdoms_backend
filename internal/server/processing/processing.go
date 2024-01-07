@@ -183,14 +183,87 @@ func (r *Repository) GetApplications(user schema.User, applicationId string) ([]
 	return applicationsToReturn, nil
 }
 
-func (r *Repository) GetAllApplications() ([]schema.RulerApplication, error) {
-	var applicationsToReturn []schema.RulerApplication
+func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]schema.RulerApplication,
+	error) {
 
-	err := r.db.
-		Where("state != 'Удалена'").
-		Order("id").
-		Preload("Creator").
-		Find(&applicationsToReturn).Error
+	var applicationsToReturn []schema.RulerApplication
+	var err error
+
+	switch {
+	case params.Status == "" && params.From == datatypes.Date{} && params.To == datatypes.Date{}:
+		fmt.Println("1", params)
+
+		err = r.db.
+			Where("state != 'Удалена'").
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	case params.Status == "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
+		fmt.Println("2", params)
+
+		err = r.db.
+			Where("state != 'Удалена' AND date_send < ?", params.To).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	case params.Status == "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
+		fmt.Println("3", params)
+
+		err = r.db.
+			Where("state != 'Удалена' AND date_send > ?", params.From).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	case params.Status == "" && params.From != datatypes.Date{} && params.To != datatypes.Date{}:
+		fmt.Println("4", params)
+
+		err = r.db.
+			Where("state != 'Удалена' AND date_send > ? AND date_send < ?", params.From, params.To).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	case params.Status != "" && params.From == datatypes.Date{} && params.To == datatypes.Date{}:
+		fmt.Println("5", params)
+
+		err = r.db.
+			Where("state = ?", params.Status).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	case params.Status != "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
+		fmt.Println("6", params)
+
+		err = r.db.
+			Where("state = ? AND date_send < ?", params.Status, params.To).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	case params.Status != "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
+		fmt.Println("7", params)
+
+		err = r.db.
+			Where("state = ? AND date_send > ?", params.Status, params.From).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	default:
+		fmt.Println("8", params)
+
+		err = r.db.
+			Where("state = ? AND date_send > ? AND date_send < ?",
+				params.Status, params.From, params.To).
+			Order("id").
+			Preload("Creator").
+			Find(&applicationsToReturn).Error
+		break
+	}
 
 	if err != nil {
 		return []schema.RulerApplication{}, err

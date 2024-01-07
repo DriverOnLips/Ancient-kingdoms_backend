@@ -27,6 +27,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 )
 
 const ASYNC_KEY = "secret"
@@ -346,7 +347,50 @@ func (a *Application) getApplications(ctx *gin.Context) {
 }
 
 func (a *Application) getAllApplications(ctx *gin.Context) {
-	applications, err := a.repo.GetAllApplications()
+	fromStr := strings.Split(ctx.Query("From"), "T")[0]
+	toStr := strings.Split(ctx.Query("To"), "T")[0]
+
+	var from time.Time
+	var to time.Time
+	var err error
+
+	if fromStr != "" {
+		from, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    400,
+				Status:  "error",
+				Message: "error parsing dateFrom: " + err.Error(),
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusBadRequest, response)
+			return
+		}
+	}
+
+	if toStr != "" {
+		to, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    400,
+				Status:  "error",
+				Message: "error parsing dateTo: " + err.Error(),
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusBadRequest, response)
+			return
+		}
+	}
+
+	params := processing.StructGetAllApplications{
+		Status: ctx.Query("Status"),
+		From:   datatypes.Date(from),
+		To:     datatypes.Date(to),
+	}
+
+	applications, err := a.repo.GetAllApplications(params)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,

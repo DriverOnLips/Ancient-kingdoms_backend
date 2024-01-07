@@ -38,3 +38,9 @@ type DeleteKingdomFromApplication struct {
 	ApplicationId uint
 	KingdomId     uint
 }
+
+type StructGetAllApplications struct {
+	Status string
+	From   datatypes.Date
+	To     datatypes.Date
+}
