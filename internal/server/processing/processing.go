@@ -191,8 +191,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 
 	switch {
 	case params.Status == "" && params.From == datatypes.Date{} && params.To == datatypes.Date{}:
-		fmt.Println("1", params)
-
 		err = r.db.
 			Where("state != 'Удалена'").
 			Order("id").
@@ -200,8 +198,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status == "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
-		fmt.Println("2", params)
-
 		err = r.db.
 			Where("state != 'Удалена' AND date_send < ?", params.To).
 			Order("id").
@@ -209,8 +205,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status == "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
-		fmt.Println("3", params)
-
 		err = r.db.
 			Where("state != 'Удалена' AND date_send > ?", params.From).
 			Order("id").
@@ -218,8 +212,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status == "" && params.From != datatypes.Date{} && params.To != datatypes.Date{}:
-		fmt.Println("4", params)
-
 		err = r.db.
 			Where("state != 'Удалена' AND date_send > ? AND date_send < ?", params.From, params.To).
 			Order("id").
@@ -227,8 +219,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status != "" && params.From == datatypes.Date{} && params.To == datatypes.Date{}:
-		fmt.Println("5", params)
-
 		err = r.db.
 			Where("state = ?", params.Status).
 			Order("id").
@@ -236,8 +226,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status != "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
-		fmt.Println("6", params)
-
 		err = r.db.
 			Where("state = ? AND date_send < ?", params.Status, params.To).
 			Order("id").
@@ -245,8 +233,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status != "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
-		fmt.Println("7", params)
-
 		err = r.db.
 			Where("state = ? AND date_send > ?", params.Status, params.From).
 			Order("id").
@@ -254,8 +240,6 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Find(&applicationsToReturn).Error
 		break
 	default:
-		fmt.Println("8", params)
-
 		err = r.db.
 			Where("state = ? AND date_send > ? AND date_send < ?",
 				params.Status, params.From, params.To).
