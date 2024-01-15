@@ -44,3 +44,8 @@ type StructGetAllApplications struct {
 	From   datatypes.Date
 	To     datatypes.Date
 }
+
+type KingdomToUpdate struct {
+	Id    uint
+	State string
+}

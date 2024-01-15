@@ -128,7 +128,8 @@ func (r *Repository) GetKingdoms(kingdomName string) ([]schema.Kingdom, error) {
 
 	var tx *gorm.DB = r.db
 
-	err := tx.Where("name LIKE " + "'%" + kingdomName + "%'").Find(&kingdomsToReturn).Error
+	err := tx.Where("name LIKE " + "'%" + kingdomName + "%'").
+		Order("id").Find(&kingdomsToReturn).Error
 	if err != nil {
 		return []schema.Kingdom{}, err
 	}
@@ -149,6 +150,37 @@ func (r *Repository) GetKingdom(kingdom schema.Kingdom) (schema.Kingdom, error) 
 	} else {
 		return kingdomToReturn, nil
 	}
+}
+
+func (r *Repository) CreateKingdom(kingdom schema.Kingdom) error {
+	err := r.db.Create(&kingdom).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdateKingdom(kingdom schema.Kingdom) error {
+	err := r.db.Model(&schema.Kingdom{}).
+		Where("id = ?", kingdom.Id).
+		Updates(kingdom).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdateKingdomStatus(kingdomToUpdate KingdomToUpdate) error {
+	res := r.db.Model(&schema.Kingdom{}).
+		Where("id = ?", kingdomToUpdate.Id).
+		Update("state", kingdomToUpdate.State)
+	if res.Error != nil {
+		return res.Error
+	}
+
+	return nil
 }
 
 func (r *Repository) GetApplications(user schema.User, applicationId string) ([]schema.RulerApplication, error) {

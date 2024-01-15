@@ -81,8 +81,11 @@ func (a *Application) StartServer() {
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
 	a.r.GET("applications/all", a.getAllApplications)
 
+	a.r.POST("kingdom/create", a.createKingdom)
 	a.r.POST("application/create", a.createApplication)
 
+	a.r.PUT("kingdom/update", a.updateKingdom)
+	a.r.PUT("kingdom/update/status", a.updateKingdomStatus)
 	a.r.PUT("application/status", a.updateApplicationStatus)
 	a.r.PUT("application/update", a.updateApplication)
 	a.r.PUT("application/add_kingdom", a.addKingdomToApplication)
@@ -297,6 +300,174 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 		Status:  "ok",
 		Message: "kingdom found",
 		Body:    kingdom,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) createKingdom(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	_, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var kingdomToCreate schema.Kingdom
+	if err := ctx.BindJSON(&kingdomToCreate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.CreateKingdom(kingdomToCreate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error creating kingdom: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom created successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) updateKingdom(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	_, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var kingdomToUpdate schema.Kingdom
+	if err := ctx.BindJSON(&kingdomToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.UpdateKingdom(kingdomToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating kingdom: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) updateKingdomStatus(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	_, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var kingdomToUpdate processing.KingdomToUpdate
+	if err := ctx.BindJSON(&kingdomToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.UpdateKingdomStatus(kingdomToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating status kingdom: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom status updated successfully",
+		Body:    nil,
 	}
 
 	ctx.JSON(http.StatusOK, response)
