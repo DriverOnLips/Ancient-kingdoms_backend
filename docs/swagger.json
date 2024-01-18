@@ -1,0 +1,824 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/application/add_kingdom": {
+            "put": {
+                "description": "Добавляет княжество в запись-черновик",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Запись"
+                ],
+                "summary": "Добавить княжество в запись",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "kingdomId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/application/create": {
+            "post": {
+                "description": "Создает новую запись и добавляет в нее переданное княжество",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Записи"
+                ],
+                "summary": "Добавить запись в БД",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "kingdomId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/application/delete": {
+            "delete": {
+                "description": "Удаляет запись",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Запись"
+                ],
+                "summary": "Удалить запись",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "name": "check",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "creatorRefer",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "dateComplete",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "dateCreate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "dateSend",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "ruler",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "state",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/application/delete_kingdom": {
+            "delete": {
+                "description": "Удаляет княжество из записи-черновика",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Запись"
+                ],
+                "summary": "Удалить княжество из записи",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "kingdomId",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/application/status": {
+            "put": {
+                "description": "Обновляет статус записи на переданный",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Записи"
+                ],
+                "summary": "Обновить статус записи",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "state",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/application/update": {
+            "put": {
+                "description": "Обновляет запись",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Записи"
+                ],
+                "summary": "Обновить запись",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "name": "check",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "creatorRefer",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "dateComplete",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "dateCreate",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "dateSend",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "ruler",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "state",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/application/update_kingdom": {
+            "put": {
+                "description": "Изменяет сроки правления княжеством в записи",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Запись"
+                ],
+                "summary": "Обновить княжество в записи",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "applicationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "kingdomId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/applications": {
+            "get": {
+                "description": "Возвращает запись, удовлетворяющую входным параметрам",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Записи"
+                ],
+                "summary": "Получить запись",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Id записи",
+                        "name": "Id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/applications/all": {
+            "get": {
+                "description": "Возвращает все записи, удовлетворяющие фильтрам",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Записи"
+                ],
+                "summary": "Получить все записи",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Статус записи",
+                        "name": "Status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Дата начала",
+                        "name": "From",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Дата окончания",
+                        "name": "To",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/applications/with_kingdoms": {
+            "get": {
+                "description": "Возвращает определенную запись и все княжества, входящие в нее",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Записи"
+                ],
+                "summary": "Получить запись с княжествами",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Id записи",
+                        "name": "Id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/kingdom": {
+            "get": {
+                "description": "Возвращает все поля требуемого княжества",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Княжество"
+                ],
+                "summary": "Получить данные о княжестве",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Id княжества",
+                        "name": "Id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/kingdom/create": {
+            "post": {
+                "description": "Создает новое княжество по переданным параметрам",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Княжество"
+                ],
+                "summary": "Добавить княжество в БД",
+                "parameters": [
+                    {
+                        "description": "Княжество",
+                        "name": "kingdomToCreate",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.Kingdom"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/kingdom/update": {
+            "put": {
+                "description": "Обновляет переданные параметры у княжества",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Княжество"
+                ],
+                "summary": "Обновляет княжество",
+                "parameters": [
+                    {
+                        "description": "Княжество",
+                        "name": "kingdomToUpdate",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/schema.Kingdom"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/kingdom/update/status": {
+            "put": {
+                "description": "Обновляет статус у княжества",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Княжество"
+                ],
+                "summary": "Обновляет статус княжества",
+                "parameters": [
+                    {
+                        "description": "Тело запроса",
+                        "name": "kingdomToUpdate",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/processing.KingdomToUpdate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/kingdoms": {
+            "get": {
+                "description": "Возвращает все княжества",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Княжество"
+                ],
+                "summary": "Получить все княжества",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Название княжества",
+                        "name": "Kingdom_name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/login": {
+            "get": {
+                "description": "Возвращает jwt токен",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Проверить сессию",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Возвращает jwt токен",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Войти в систему",
+                "parameters": [
+                    {
+                        "description": "Тело запроса",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/serverModels.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/logout": {
+            "delete": {
+                "description": "Удаляет сессию пользователя",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Выход из системы",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        },
+        "/signup": {
+            "post": {
+                "description": "Создает пользователя в БД",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Аутентификация"
+                ],
+                "summary": "Регистрация в системе",
+                "parameters": [
+                    {
+                        "description": "Тело запроса",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/serverModels.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": ""
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "processing.KingdomToUpdate": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "role.Role": {
+            "type": "integer",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "Unknown",
+                "Buyer",
+                "Manager",
+                "Admin"
+            ]
+        },
+        "schema.Kingdom": {
+            "type": "object",
+            "properties": {
+                "area": {
+                    "type": "integer"
+                },
+                "capital": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "schema.User": {
+            "type": "object",
+            "properties": {
+                "Name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/role.Role"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "serverModels.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "serverModels.RegisterRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "лучше назвать то же самое что login",
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

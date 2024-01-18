@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/swaggo/swag/example/basic/docs"
+
 	config "kingdoms/internal/config"
 	"kingdoms/internal/database/connect"
 	"kingdoms/internal/database/schema"
@@ -70,6 +74,10 @@ func (a *Application) StartServer() {
 
 	a.r = gin.Default()
 
+	// swagger
+	docs.SwaggerInfo.BasePath = "/"
+	a.r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+
 	a.r.GET("kingdoms", a.getKingdomsFeed)
 	a.r.GET("kingdom", a.getKingdom)
 	a.r.GET("applications", a.getApplications)
@@ -99,6 +107,14 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
+// @Summary Получить все княжества
+// @Description  Возвращает все княжества
+// @Tags Княжество
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param Kingdom_name query string false "Название княжества"
+// @Router /kingdoms [get]
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 	kingdomName := ctx.Query("Kingdom_name") // TODO окно для пагинации
 
@@ -126,6 +142,14 @@ func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Получить данные о княжестве
+// @Description  Возвращает все поля требуемого княжества
+// @Tags Княжество
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param Id query string false "Id княжества"
+// @Router /kingdom [get]
 func (a *Application) getKingdom(ctx *gin.Context) {
 	kingdomID, err := strconv.Atoi(ctx.Query("Id"))
 	if err != nil {
@@ -166,6 +190,14 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Добавить княжество в БД
+// @Description  Создает новое княжество по переданным параметрам
+// @Tags Княжество
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param kingdomToCreate body schema.Kingdom true "Княжество"
+// @Router /kingdom/create [post]
 func (a *Application) createKingdom(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -222,6 +254,14 @@ func (a *Application) createKingdom(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Обновляет княжество
+// @Description  Обновляет переданные параметры у княжества
+// @Tags Княжество
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param kingdomToUpdate body schema.Kingdom true "Княжество"
+// @Router /kingdom/update [put]
 func (a *Application) updateKingdom(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -278,6 +318,14 @@ func (a *Application) updateKingdom(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Обновляет статус княжества
+// @Description  Обновляет статус у княжества
+// @Tags Княжество
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param kingdomToUpdate body processing.KingdomToUpdate true "Тело запроса"
+// @Router /kingdom/update/status [put]
 func (a *Application) updateKingdomStatus(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -334,6 +382,14 @@ func (a *Application) updateKingdomStatus(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Получить запись
+// @Description  Возвращает запись, удовлетворяющую входным параметрам
+// @Tags Записи
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param Id query string false "Id записи"
+// @Router /applications [get]
 func (a *Application) getApplications(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -378,6 +434,16 @@ func (a *Application) getApplications(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Получить все записи
+// @Description  Возвращает все записи, удовлетворяющие фильтрам
+// @Tags Записи
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param Status query string false "Статус записи"
+// @Param From query string false "Дата начала" Format(date-time)
+// @Param To query string false "Дата окончания" Format(date-time)
+// @Router /applications/all [get]
 func (a *Application) getAllApplications(ctx *gin.Context) {
 	fromStr := strings.Split(ctx.Query("From"), "T")[0]
 	toStr := strings.Split(ctx.Query("To"), "T")[0]
@@ -444,6 +510,14 @@ func (a *Application) getAllApplications(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Получить запись с княжествами
+// @Description  Возвращает определенную запись и все княжества, входящие в нее
+// @Tags Записи
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param Id query string true "Id записи"
+// @Router /applications/with_kingdoms [get]
 func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -499,6 +573,14 @@ func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Добавить запись в БД
+// @Description  Создает новую запись и добавляет в нее переданное княжество
+// @Tags Записи
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param applicationToAdd query processing.KingdomAddToApplication true "Тело запроса"
+// @Router /application/create [post]
 func (a *Application) createApplication(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -584,6 +666,14 @@ func (a *Application) createApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Обновить статус записи
+// @Description  Обновляет статус записи на переданный
+// @Tags Записи
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param applicationToUpdate query processing.ApplicationToUpdate true "Запись"
+// @Router /application/status [put]
 func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -640,6 +730,14 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Обновить запись
+// @Description  Обновляет запись
+// @Tags Записи
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param applicationToUpdate query schema.RulerApplication true "Запись"
+// @Router /application/update [put]
 func (a *Application) updateApplication(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -696,6 +794,14 @@ func (a *Application) updateApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Добавить княжество в запись
+// @Description  Добавляет княжество в запись-черновик
+// @Tags Запись
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param kingdomAddToApplication query processing.KingdomAddToApplication true "Тело запроса"
+// @Router /application/add_kingdom [put]
 func (a *Application) addKingdomToApplication(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -752,6 +858,14 @@ func (a *Application) addKingdomToApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Обновить княжество в записи
+// @Description  Изменяет сроки правления княжеством в записи
+// @Tags Запись
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param updateKingdomFromApplication query processing.KingdomAddToApplication true "Тело запроса"
+// @Router /application/update_kingdom [put]
 func (a *Application) updateKingdomFromApplication(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -808,6 +922,14 @@ func (a *Application) updateKingdomFromApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Удалить княжество из записи
+// @Description  Удаляет княжество из записи-черновика
+// @Tags Запись
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param kingdomToDeleteFromApplication query processing.DeleteKingdomFromApplication true "Тело запроса"
+// @Router /application/delete_kingdom [delete]
 func (a *Application) deleteKingdomFromApplication(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -864,6 +986,14 @@ func (a *Application) deleteKingdomFromApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
+// @Summary Удалить запись
+// @Description  Удаляет запись
+// @Tags Запись
+// @Accept json
+// @Produce json
+// @Success 200 {} json
+// @Param applicatinToDelete query schema.RulerApplication true "Запись"
+// @Router /application/delete [delete]
 func (a *Application) deleteApplication(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -920,186 +1050,13 @@ func (a *Application) deleteApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-// func (a *Application) getRuler(ctx *gin.Context) {
-// 	var ruler schema.Ruler
-// 	if err := ctx.BindJSON(&ruler); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
-// 		return
-// 	}
-
-// 	necessaryRuler, err := a.repo.GetRuler(ruler)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error getting ruler:"+err.Error())
-// 		return
-// 	}
-// 	if necessaryRuler == (schema.Ruler{}) {
-// 		ctx.String(http.StatusNotFound, "no necessary ruler")
-// 		return
-// 	}
-
-// 	ctx.JSON(http.StatusFound, necessaryRuler)
-// }
-
-// func (a *Application) addKingdom(ctx *gin.Context) {
-// 	var kingdom schema.Kingdom
-// 	if err := ctx.BindJSON(&kingdom); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
-// 		return
-// 	}
-
-// 	err := a.repo.CreateKingdom(kingdom)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error creating kingdom:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusCreated, "creating kingdom done successfully")
-// }
-
-// func (a *Application) editKingdom(ctx *gin.Context) {
-// 	var kingdom schema.Kingdom
-// 	if err := ctx.BindJSON(&kingdom); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing ruler")
-// 		return
-// 	}
-
-// 	err := a.repo.EditKingdom(kingdom)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error editing kingdom:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.JSON(http.StatusNoContent, kingdom)
-// }
-
-// func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
-// 	var requestBody requestsModels.CreateRulerForKingdomRequest
-// 	if err := ctx.BindJSON(&requestBody); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
-// 		return
-// 	}
-
-// 	err := a.repo.CreateRulerForKingdom(requestBody)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error ruler for kingdom additing:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "additing done successfully")
-// }
-
-// func (a *Application) editRuler(ctx *gin.Context) {
-// 	var ruler schema.Ruler
-// 	if err := ctx.BindJSON(&ruler); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
-// 		return
-// 	}
-
-// 	err := a.repo.EditRuler(ruler)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error editing ruler:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "edditing ruler done successfully")
-// }
-
-// func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
-// 	var requestBody requestsModels.RulerStateChangeRequest
-// 	if err := ctx.BindJSON(&requestBody); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
-// 		return
-// 	}
-
-// 	userRole, err := a.repo.GetUserRole(requestBody.User)
-// 	if err != nil {
-// 		ctx.String(http.StatusBadRequest, "error getting user role:"+err.Error())
-// 		return
-// 	}
-// 	if userRole != role.Admin {
-// 		ctx.String(http.StatusUnauthorized, "no enouth rules for executing this operation")
-// 		return
-// 	}
-
-// 	err = a.repo.RulerStateChange(requestBody.ID, requestBody.State)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error ruler state changing:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "ruler state changing done successfully")
-// }
-
-// func (a *Application) rulerStateChangeUser(ctx *gin.Context) {
-// 	var requestBody requestsModels.RulerStateChangeRequest
-// 	if err := ctx.BindJSON(&requestBody); err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
-// 		return
-// 	}
-
-// 	userRole, err := a.repo.GetUserRole(requestBody.User)
-// 	if err != nil {
-// 		ctx.String(http.StatusBadRequest, "error getting user role:"+err.Error())
-// 		return
-// 	}
-// 	if userRole != role.Admin && userRole != role.Manager {
-// 		ctx.String(http.StatusUnauthorized, "no enouth rules for executing this operation")
-// 		return
-// 	}
-
-// 	err = a.repo.RulerStateChange(requestBody.ID, requestBody.State)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error ruler state changing:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "ruler state changing done successfully")
-// }
-
-// func (a *Application) deleteKingdom(ctx *gin.Context) {
-// 	kingdomName := ctx.Param("kingdom_name")
-
-// 	err := a.repo.DeleteKingdom(kingdomName)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error deleting kingdom:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "deleting kingdom done successfully")
-// }
-
-// func (a *Application) deleteRuler(ctx *gin.Context) {
-// 	rulerName := ctx.Param("ruler_name")
-
-// 	err := a.repo.DeleteRuler(rulerName)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error deleting ruler:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "deleting ruler done successfully")
-// }
-
-// func (a *Application) deleteKingdomRuler(ctx *gin.Context) {
-// 	kingdomName := ctx.Param("kingdom_name")
-
-// 	rulerName := ctx.Param("ruler_name")
-
-// 	rulingID, err := strconv.Atoi(ctx.Param("ruling_id"))
-// 	if err != nil {
-// 		ctx.String(http.StatusBadRequest, "error parsing rulingID")
-// 		return
-// 	}
-
-// 	err = a.repo.DeleteKingdomRuler(kingdomName, rulerName, rulingID)
-// 	if err != nil {
-// 		ctx.String(http.StatusInternalServerError, "error delering kingdom ruler:"+err.Error())
-// 		return
-// 	}
-
-// 	ctx.String(http.StatusNoContent, "deleting kingdom ruler done successfully")
-// }
-
+// @Summary Проверить сессию
+// @Description Возвращает jwt токен
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200 {} json
+// @Router /login [get]
 func (a *Application) checkLogin(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
@@ -1138,6 +1095,14 @@ func (a *Application) checkLogin(ctx *gin.Context) {
 	return
 }
 
+// @Summary Войти в систему
+// @Description Возвращает jwt токен
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200 {} json
+// @Param request body serverModels.LoginRequest true "Тело запроса"
+// @Router /login [post]
 func (a *Application) login(ctx *gin.Context) {
 	cfg := a.config
 	request := &serverModels.LoginRequest{}
@@ -1232,6 +1197,14 @@ func (a *Application) login(ctx *gin.Context) {
 	ctx.JSON(http.StatusForbidden, response)
 }
 
+// @Summary Регистрация в системе
+// @Description Создает пользователя в БД
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200 {} json
+// @Param request body serverModels.RegisterRequest true "Тело запроса"
+// @Router /signup [post]
 func (a *Application) signup(ctx *gin.Context) {
 	request := &serverModels.RegisterRequest{}
 
@@ -1307,6 +1280,13 @@ func generateHashString(str string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+// @Summary Выход из системы
+// @Description Удаляет сессию пользователя
+// @Tags Аутентификация
+// @Produce json
+// @Accept json
+// @Success 200 {} json
+// @Router /logout [delete]
 func (a *Application) logout(ctx *gin.Context) {
 	jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
 	if cookieErr != nil {

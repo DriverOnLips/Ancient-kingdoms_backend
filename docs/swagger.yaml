@@ -1,0 +1,527 @@
+definitions:
+  processing.KingdomToUpdate:
+    properties:
+      id:
+        type: integer
+      state:
+        type: string
+    type: object
+  role.Role:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    type: integer
+    x-enum-varnames:
+    - Unknown
+    - Buyer
+    - Manager
+    - Admin
+  schema.Kingdom:
+    properties:
+      area:
+        type: integer
+      capital:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      image:
+        type: string
+      name:
+        type: string
+      state:
+        type: string
+    type: object
+  schema.User:
+    properties:
+      Name:
+        type: string
+      id:
+        type: integer
+      password:
+        type: string
+      role:
+        $ref: '#/definitions/role.Role'
+      uuid:
+        type: string
+    type: object
+  serverModels.LoginRequest:
+    properties:
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  serverModels.RegisterRequest:
+    properties:
+      name:
+        description: лучше назвать то же самое что login
+        type: string
+      password:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /application/add_kingdom:
+    put:
+      consumes:
+      - application/json
+      description: Добавляет княжество в запись-черновик
+      parameters:
+      - in: query
+        name: applicationId
+        type: integer
+      - in: query
+        name: from
+        type: string
+      - in: query
+        name: kingdomId
+        type: integer
+      - in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Добавить княжество в запись
+      tags:
+      - Запись
+  /application/create:
+    post:
+      consumes:
+      - application/json
+      description: Создает новую запись и добавляет в нее переданное княжество
+      parameters:
+      - in: query
+        name: applicationId
+        type: integer
+      - in: query
+        name: from
+        type: string
+      - in: query
+        name: kingdomId
+        type: integer
+      - in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Добавить запись в БД
+      tags:
+      - Записи
+  /application/delete:
+    delete:
+      consumes:
+      - application/json
+      description: Удаляет запись
+      parameters:
+      - in: query
+        name: check
+        type: boolean
+      - in: query
+        name: creatorRefer
+        type: integer
+      - in: query
+        name: dateComplete
+        type: string
+      - in: query
+        name: dateCreate
+        type: string
+      - in: query
+        name: dateSend
+        type: string
+      - in: query
+        name: id
+        type: integer
+      - in: query
+        name: ruler
+        type: string
+      - in: query
+        name: state
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Удалить запись
+      tags:
+      - Запись
+  /application/delete_kingdom:
+    delete:
+      consumes:
+      - application/json
+      description: Удаляет княжество из записи-черновика
+      parameters:
+      - in: query
+        name: applicationId
+        type: integer
+      - in: query
+        name: kingdomId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Удалить княжество из записи
+      tags:
+      - Запись
+  /application/status:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет статус записи на переданный
+      parameters:
+      - in: query
+        name: id
+        type: integer
+      - in: query
+        name: state
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Обновить статус записи
+      tags:
+      - Записи
+  /application/update:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет запись
+      parameters:
+      - in: query
+        name: check
+        type: boolean
+      - in: query
+        name: creatorRefer
+        type: integer
+      - in: query
+        name: dateComplete
+        type: string
+      - in: query
+        name: dateCreate
+        type: string
+      - in: query
+        name: dateSend
+        type: string
+      - in: query
+        name: id
+        type: integer
+      - in: query
+        name: ruler
+        type: string
+      - in: query
+        name: state
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Обновить запись
+      tags:
+      - Записи
+  /application/update_kingdom:
+    put:
+      consumes:
+      - application/json
+      description: Изменяет сроки правления княжеством в записи
+      parameters:
+      - in: query
+        name: applicationId
+        type: integer
+      - in: query
+        name: from
+        type: string
+      - in: query
+        name: kingdomId
+        type: integer
+      - in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Обновить княжество в записи
+      tags:
+      - Запись
+  /applications:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает запись, удовлетворяющую входным параметрам
+      parameters:
+      - description: Id записи
+        in: query
+        name: Id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Получить запись
+      tags:
+      - Записи
+  /applications/all:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает все записи, удовлетворяющие фильтрам
+      parameters:
+      - description: Статус записи
+        in: query
+        name: Status
+        type: string
+      - description: Дата начала
+        format: date-time
+        in: query
+        name: From
+        type: string
+      - description: Дата окончания
+        format: date-time
+        in: query
+        name: To
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Получить все записи
+      tags:
+      - Записи
+  /applications/with_kingdoms:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает определенную запись и все княжества, входящие в нее
+      parameters:
+      - description: Id записи
+        in: query
+        name: Id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Получить запись с княжествами
+      tags:
+      - Записи
+  /kingdom:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает все поля требуемого княжества
+      parameters:
+      - description: Id княжества
+        in: query
+        name: Id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Получить данные о княжестве
+      tags:
+      - Княжество
+  /kingdom/create:
+    post:
+      consumes:
+      - application/json
+      description: Создает новое княжество по переданным параметрам
+      parameters:
+      - description: Княжество
+        in: body
+        name: kingdomToCreate
+        required: true
+        schema:
+          $ref: '#/definitions/schema.Kingdom'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Добавить княжество в БД
+      tags:
+      - Княжество
+  /kingdom/update:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет переданные параметры у княжества
+      parameters:
+      - description: Княжество
+        in: body
+        name: kingdomToUpdate
+        required: true
+        schema:
+          $ref: '#/definitions/schema.Kingdom'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Обновляет княжество
+      tags:
+      - Княжество
+  /kingdom/update/status:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет статус у княжества
+      parameters:
+      - description: Тело запроса
+        in: body
+        name: kingdomToUpdate
+        required: true
+        schema:
+          $ref: '#/definitions/processing.KingdomToUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Обновляет статус княжества
+      tags:
+      - Княжество
+  /kingdoms:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает все княжества
+      parameters:
+      - description: Название княжества
+        in: query
+        name: Kingdom_name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Получить все княжества
+      tags:
+      - Княжество
+  /login:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает jwt токен
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Проверить сессию
+      tags:
+      - Аутентификация
+    post:
+      consumes:
+      - application/json
+      description: Возвращает jwt токен
+      parameters:
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/serverModels.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Войти в систему
+      tags:
+      - Аутентификация
+  /logout:
+    delete:
+      consumes:
+      - application/json
+      description: Удаляет сессию пользователя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Выход из системы
+      tags:
+      - Аутентификация
+  /signup:
+    post:
+      consumes:
+      - application/json
+      description: Создает пользователя в БД
+      parameters:
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/serverModels.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: ""
+      summary: Регистрация в системе
+      tags:
+      - Аутентификация
+swagger: "2.0"
