@@ -10,8 +10,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const jwtPrefix = "Bearer"
-
 type Repository struct {
 	db *gorm.DB
 }
