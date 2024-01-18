@@ -1,0 +1,49 @@
+<html>
+    <head>
+      <title>{{ .Name }} княжество</title>
+      <link rel="stylesheet" href="css/style.css">
+    </head>
+    <div class="header" style="text-align: center;">
+      <h1>{{ .Name }} княжество</h1>
+    </div>
+    <div style="font-size: 40px">
+      <div class="container" 
+        style="font-size: 40px; 
+        display: flex; 
+        flex-direction: row; 
+        align-items: center;"
+      >
+        <div class="column" 
+          style="display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 50vw;"
+        >
+          <img src="{{ .Image }}" style="width: 600px; height: 600;">
+        </div>
+        <div style="display: flex;
+          flex-direction: column;
+          justify-content: center;
+          width: 50vw;"
+        > 
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <span style="font-size: 25px">Площадь</span>
+            <span style="font-size: 40px">{{ .Area }}</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <span style="font-size: 25px">Столица</span>
+            <span style="font-size: 40px">{{ .Capital }}</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <span style="font-size: 25px">Описание</span>
+            <span style="font-size: 40px">{{ .Description }}</p>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <a class="button" href="../" style="font-size: 35px; width: 249px; 
+        padding: 0px 10px; height: 64px;flex-shrink: 0;border-radius: 20px;background: #358CDC;
+        color: black; text-decoration: none;">Домой</a>
+      </div>
+    </div>
+</html>
