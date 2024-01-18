@@ -91,38 +91,6 @@ func (r *Repository) FoundUserFromHeader(ctx *gin.Context, redis *redis.Client, 
 	return token.Claims.(*serverModels.JWTClaims), responseModels.ResponseDefault{}
 }
 
-func (r *Repository) AsyncGetApplication(applicationId string) (AsyncStructApplication, error) {
-	var applicationToReturn AsyncStructApplication
-
-	var tx *gorm.DB = r.db
-	err := tx.Table("ruler_applications").
-		Select("id, 'check'").
-		Where("id = ?", applicationId).
-		Scan(&applicationToReturn).Error
-	if err != nil {
-		return AsyncStructApplication{}, err
-	}
-
-	if applicationToReturn == (AsyncStructApplication{}) {
-		return AsyncStructApplication{}, errors.New("application not found")
-	}
-
-	return applicationToReturn, nil
-}
-
-func (r *Repository) AsyncPutApplicationInfo(applicationToPut AsyncStructApplication) error {
-	var tx *gorm.DB = r.db
-
-	err := tx.Model(&schema.RulerApplication{}).
-		Where("id = ?", applicationToPut.Id).
-		Update("check", applicationToPut.Check).Error
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *Repository) GetKingdoms(kingdomName string) ([]schema.Kingdom, error) {
 	kingdomsToReturn := []schema.Kingdom{}
 
@@ -349,7 +317,7 @@ func (r *Repository) CreateApplication(user schema.User) (schema.RulerApplicatio
 	return application, nil
 }
 
-func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpdate ApplicationToUpdate) (AsyncStructApplication, error) {
+func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpdate ApplicationToUpdate) error {
 	var tx *gorm.DB = r.db
 
 	var app schema.RulerApplication
@@ -358,10 +326,10 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 		Where("creator_refer = ?", user.Id).
 		First(&app).Error
 	if err != nil {
-		return AsyncStructApplication{}, err
+		return err
 	}
 	if app == (schema.RulerApplication{}) {
-		return AsyncStructApplication{}, errors.New("no necessary application found")
+		return errors.New("no necessary application found")
 	}
 
 	switch applicationToUpdate.State {
@@ -374,7 +342,7 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 				"date_send": datatypes.Date(time.Now()),
 			}).Error
 		if err != nil {
-			return AsyncStructApplication{}, err
+			return err
 		}
 
 		break
@@ -388,7 +356,7 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 				"date_complete": datatypes.Date(time.Now()),
 			}).Error
 		if err != nil {
-			return AsyncStructApplication{}, err
+			return err
 		}
 		break
 
@@ -401,7 +369,7 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 				"date_complete": datatypes.Date(time.Now()),
 			}).Error
 		if err != nil {
-			return AsyncStructApplication{}, err
+			return err
 		}
 		break
 
@@ -411,7 +379,7 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 			Where("creator_refer = ?", user.Id).
 			Update("state", applicationToUpdate.State).Error
 		if err != nil {
-			return AsyncStructApplication{}, err
+			return err
 		}
 		break
 
@@ -419,19 +387,7 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 		break
 	}
 
-	var applicationToReturn AsyncStructApplication
-	err = tx.Table("ruler_applications").
-		Select("id, 'check'").
-		Where("id = ?", applicationToUpdate.Id).
-		Where("creator_refer = ?", user.Id).
-		Scan(&applicationToReturn).Error
-
-	err = tx.Model(&schema.RulerApplication{}).
-		Where("id = ?", applicationToUpdate.Id).
-		Where("creator_refer = ?", user.Id).
-		First(&applicationToReturn).Error
-
-	return applicationToReturn, nil
+	return nil
 }
 
 func (r *Repository) UpdateApplication(user schema.User,

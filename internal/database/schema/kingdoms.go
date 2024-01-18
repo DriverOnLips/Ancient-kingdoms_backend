@@ -34,9 +34,7 @@ type RulerApplication struct {
 	Ruler        string `gorm:"type:varchar(50);not null"`
 	CreatorRefer int    `gorm:"not null"`
 	Creator      User   `gorm:"foreignKey:CreatorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	// ModeratorRefer int    `gorm:"not null"`
-	// Moderator      User   `gorm:"foreignKey:ModeratorRefer"`
-	Check bool `gorm:"type:boolean"`
+	Check        bool   `gorm:"type:boolean"`
 }
 
 type Kingdom2Application struct {

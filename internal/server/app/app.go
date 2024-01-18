@@ -5,11 +5,8 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -29,8 +26,6 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 )
-
-const ASYNC_KEY = "secret"
 
 type Application struct {
 	config *config.Config
@@ -94,23 +89,6 @@ func (a *Application) StartServer() {
 	a.r.DELETE("application/delete_kingdom", a.deleteKingdomFromApplication)
 	a.r.DELETE("application/delete", a.deleteApplication)
 
-	a.r.GET("async/application", a.asyncGetApplication)
-	a.r.PUT("async/application", a.asyncPutApplicationInfo)
-
-	// a.r.POST("kingdom/add", a.addKingdom)
-	// a.r.PUT("kingdom/edit", a.editKingdom)
-	// a.r.PUT("kingdom/ruler_to_kingdom", a.CreateRulerForKingdom)
-
-	// // a.r.Use(a.WithAuthCheck(role.Moderator, role.Admin)).PUT("ruler/edit", a.editRuler)
-	// a.r.PUT("ruler/edit", a.editRuler)
-	// a.r.PUT("ruler/state_change/moderator", a.rulerStateChangeModerator)
-	// a.r.PUT("ruler/state_change/user", a.rulerStateChangeUser)
-
-	// a.r.PUT("kingdom/delete/:kingdom_name", a.deleteKingdom)
-	// a.r.PUT("kingdom/ruler/:ruler_name", a.deleteRuler)
-
-	// a.r.DELETE("kingdom_ruler_delete/:kingdom_name/:ruler_name/:ruling_id", a.deleteKingdomRuler)
-
 	a.r.GET("login", a.checkLogin)
 	a.r.POST("login", a.login)
 	a.r.POST("signup", a.signup)
@@ -119,123 +97,6 @@ func (a *Application) StartServer() {
 	a.r.Run(":8000")
 
 	log.Println("Server is down")
-}
-
-func (a *Application) asyncGetApplication(ctx *gin.Context) {
-	key := ctx.GetHeader("AsyncKey")
-	if key != ASYNC_KEY {
-		response := responseModels.ResponseDefault{
-			Code:    403,
-			Status:  "error",
-			Message: "error getting async server key",
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusForbidden, response)
-		return
-	}
-
-	applicationId := ctx.Query("Id")
-	if applicationId == "" {
-		response := responseModels.ResponseDefault{
-			Code:    400,
-			Status:  "error",
-			Message: "error no id provided",
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusBadRequest, response)
-		return
-	}
-
-	applications, err := a.repo.AsyncGetApplication(applicationId)
-	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error getting necessary applications: " + err.Error(),
-			Body:    nil,
-		}
-		ctx.JSON(http.StatusInternalServerError, response)
-		return
-	}
-
-	response := responseModels.ResponseDefault{
-		Code:    200,
-		Status:  "ok",
-		Message: "kingdoms from application found",
-		Body:    applications,
-	}
-
-	ctx.JSON(http.StatusOK, response)
-}
-
-func (a *Application) asyncPutApplicationInfo(ctx *gin.Context) {
-	key := ctx.GetHeader("AsyncKey")
-	if key != ASYNC_KEY {
-		response := responseModels.ResponseDefault{
-			Code:    403,
-			Status:  "error",
-			Message: "error getting async server key",
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusForbidden, response)
-		return
-	}
-
-	var applicationToPut processing.AsyncStructApplication
-	bodyBytes, _ := ioutil.ReadAll(ctx.Request.Body)
-	err := json.Unmarshal(bodyBytes, &applicationToPut)
-	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    400,
-			Status:  "error",
-			Message: "error parsing application:" + err.Error(),
-			Body:    nil,
-		}
-
-		ctx.JSON(http.StatusBadRequest, response)
-
-		fmt.Println(err.Error())
-
-		return
-	}
-
-	err = a.repo.AsyncPutApplicationInfo(applicationToPut)
-	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: err.Error(),
-			Body:    nil,
-		}
-		ctx.JSON(http.StatusInternalServerError, response)
-		return
-	}
-
-	response := responseModels.ResponseDefault{
-		Code:    200,
-		Status:  "ok",
-		Message: "appliction updated successfully",
-		Body:    nil,
-	}
-
-	ctx.JSON(http.StatusOK, response)
-}
-
-func (a *Application) sendRequestToAsyncServer(applicationToSend processing.AsyncStructApplication) {
-	data := url.Values{
-		"Id":    {strconv.Itoa(int(applicationToSend.Id))},
-		"Check": {strconv.FormatBool(applicationToSend.Check)},
-	}
-
-	resp, err := http.PostForm("http://0.0.0.0:8080/", data)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer resp.Body.Close()
 }
 
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
@@ -756,7 +617,7 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 		return
 	}
 
-	application4Async, err := a.repo.UpdateApplicationStatus(*user, applicationToUpdate)
+	err = a.repo.UpdateApplicationStatus(*user, applicationToUpdate)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -777,8 +638,6 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, response)
-
-	a.sendRequestToAsyncServer(application4Async)
 }
 
 func (a *Application) updateApplication(ctx *gin.Context) {
