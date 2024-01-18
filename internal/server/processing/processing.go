@@ -28,7 +28,8 @@ func (r *Repository) GetKingdoms(kingdomName string) ([]schema.Kingdom, error) {
 
 	var tx *gorm.DB = r.db
 
-	err := tx.Where("name LIKE " + "'%" + kingdomName + "%'").
+	err := tx.Where("name LIKE "+"'%"+kingdomName+"%'").
+		Where("state != ?", "Данные утеряны").
 		Order("id").Find(&kingdomsToReturn).Error
 	if err != nil {
 		return []schema.Kingdom{}, err
@@ -50,4 +51,20 @@ func (r *Repository) GetKingdom(kingdom schema.Kingdom) (schema.Kingdom, error) 
 	} else {
 		return kingdomToReturn, nil
 	}
+}
+
+func (r *Repository) UpdateKingdomStatus(kingdomId int, state string) error {
+	tx := r.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Exec(`UPDATE public.kingdoms SET state = ? WHERE id = ?`, state, kingdomId).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }

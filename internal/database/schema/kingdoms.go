@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"html/template"
 	role "kingdoms/internal/server/app/userRole"
 
 	"github.com/google/uuid"
@@ -8,13 +9,13 @@ import (
 )
 
 type Kingdom struct {
-	Id          uint   `gorm:"primaryKey;AUTO_INCREMENT"`
-	Name        string `gorm:"type:varchar(100);unique;not null"`
-	Area        int    `gorm:"not null"`
-	Capital     string `gorm:"type:varchar(50);not null"`
-	Image       string `gorm:"type:bytea"`
-	Description string `gorm:"size:255"`
-	State       string `gorm:"type:varchar(50);not null"`
+	Id          uint         `gorm:"primaryKey;AUTO_INCREMENT"`
+	Name        string       `gorm:"type:varchar(100);unique;not null"`
+	Area        int          `gorm:"not null"`
+	Capital     string       `gorm:"type:varchar(50);not null"`
+	Image       template.URL `gorm:"type:bytea"`
+	Description string       `gorm:"size:255"`
+	State       string       `gorm:"type:varchar(50);not null"`
 }
 
 type User struct {
@@ -26,15 +27,17 @@ type User struct {
 }
 
 type RulerApplication struct {
-	Id           uint           `gorm:"primaryKey;AUTO_INCREMENT"`
-	State        string         `gorm:"type:varchar(50);not null"`
-	DateCreate   datatypes.Date `gorm:"not null;default:CURRENT_DATE"`
-	DateSend     datatypes.Date
-	DateComplete datatypes.Date
-	Ruler        string `gorm:"type:varchar(50);not null"`
-	CreatorRefer int    `gorm:"not null"`
-	Creator      User   `gorm:"foreignKey:CreatorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	Check        bool   `gorm:"type:boolean"`
+	Id             uint           `gorm:"primaryKey;AUTO_INCREMENT"`
+	State          string         `gorm:"type:varchar(50);not null"`
+	DateCreate     datatypes.Date `gorm:"not null;default:CURRENT_DATE"`
+	DateSend       datatypes.Date
+	DateComplete   datatypes.Date
+	Ruler          string `gorm:"type:varchar(50);not null"`
+	CreatorRefer   int    `gorm:"not null"`
+	Creator        User   `gorm:"foreignKey:CreatorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	ModeratorRefer int
+	Moderator      User `gorm:"foreignKey:ModeratorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Check          bool `gorm:"type:boolean"`
 }
 
 type Kingdom2Application struct {

@@ -6,7 +6,6 @@ import (
 	"kingdoms/internal/database/connect"
 	"kingdoms/internal/database/schema"
 	"kingdoms/internal/server/processing"
-	"kingdoms/internal/server/responseModels"
 	"log"
 	"net/http"
 	"strconv"
@@ -50,8 +49,11 @@ func (a *Application) StartServer() {
 
 	a.r = gin.Default()
 
-	a.r.GET("kingdoms", a.getKingdomsFeed)
-	a.r.GET("kingdom", a.getKingdom)
+	a.r.LoadHTMLGlob("../../templates/*.html")
+
+	a.r.GET("/:Id", a.getKingdom)
+	a.r.GET("/", a.getKingdomsFeed)
+	a.r.POST("/status/:Id", a.updateKingdomStatus)
 
 	a.r.Run(":8000")
 
@@ -63,41 +65,23 @@ func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 
 	kingdoms, err := a.repo.GetKingdoms(kingdomName)
 	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error getting necessary kingdoms: " + err.Error(),
-			Body:    nil,
-		}
+		log.Println(err)
 
-		ctx.JSON(http.StatusInternalServerError, response)
-
-		return
+		ctx.Error(err)
 	}
 
-	response := responseModels.ResponseDefault{
-		Code:    200,
-		Status:  "ok",
-		Message: "kingdoms found",
-		Body:    kingdoms,
-	}
-
-	ctx.JSON(http.StatusOK, response)
+	ctx.HTML(http.StatusOK, "index.html", gin.H{
+		"Kingdoms":     kingdoms,
+		"Kingdom_name": kingdomName,
+	})
 }
 
 func (a *Application) getKingdom(ctx *gin.Context) {
-	kingdomID, err := strconv.Atoi(ctx.Query("Id"))
+	kingdomID, err := strconv.Atoi(ctx.Param("Id"))
 	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error getting kingdom by ID: " + err.Error(),
-			Body:    nil,
-		}
+		log.Println(err)
 
-		ctx.JSON(http.StatusInternalServerError, response)
-
-		return
+		ctx.Error(err)
 	}
 
 	var kingdom schema.Kingdom
@@ -105,22 +89,49 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 
 	kingdom, err = a.repo.GetKingdom(kingdom)
 	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error getting necessary kingdom: " + err.Error(),
-			Body:    nil,
-		}
-		ctx.JSON(http.StatusInternalServerError, response)
-		return
+		ctx.Error(err)
 	}
 
-	response := responseModels.ResponseDefault{
-		Code:    200,
-		Status:  "ok",
-		Message: "kingdom found",
-		Body:    kingdom,
+	ctx.HTML(http.StatusOK, "kingdom.html", gin.H{
+		"Id":          kingdom.Id,
+		"Name":        kingdom.Name,
+		"Area":        kingdom.Area,
+		"Capital":     kingdom.Capital,
+		"Image":       kingdom.Image,
+		"Description": kingdom.Description,
+		"State":       kingdom.State,
+	})
+}
+
+func (a *Application) updateKingdomStatus(c *gin.Context) {
+	kingdomId, err := strconv.Atoi(c.Param("Id"))
+	if err != nil {
+		log.Println(err)
+
+		c.Error(err)
 	}
 
-	ctx.JSON(http.StatusOK, response)
+	kingdomState := c.PostForm("State")
+	if err != nil {
+		log.Println(err)
+
+		c.Error(err)
+	}
+
+	var newStatus string
+	if kingdomState == "Данные подтверждены" {
+		newStatus = "Данные утеряны"
+	} else {
+		newStatus = "Данные подтверждены"
+	}
+
+	err = a.repo.UpdateKingdomStatus(kingdomId, newStatus)
+
+	if err != nil {
+		log.Println(err)
+
+		c.Error(err)
+	}
+
+	c.Redirect(http.StatusFound, "/"+strconv.Itoa(kingdomId))
 }
