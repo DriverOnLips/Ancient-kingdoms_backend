@@ -248,7 +248,7 @@ func (a *Application) createKingdom(ctx *gin.Context) {
 		return
 	}
 
-	_, err := a.repo.GetUserByName(myClaims.Name)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -258,6 +258,18 @@ func (a *Application) createKingdom(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	if user.Role < 2 {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "insufficient rights to complete the request",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
 
@@ -304,7 +316,7 @@ func (a *Application) updateKingdom(ctx *gin.Context) {
 		return
 	}
 
-	_, err := a.repo.GetUserByName(myClaims.Name)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -314,6 +326,18 @@ func (a *Application) updateKingdom(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	if user.Role < 2 {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "insufficient rights to complete the request",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
 
@@ -360,7 +384,7 @@ func (a *Application) updateKingdomStatus(ctx *gin.Context) {
 		return
 	}
 
-	_, err := a.repo.GetUserByName(myClaims.Name)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -383,6 +407,18 @@ func (a *Application) updateKingdomStatus(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	if user.Role < 2 {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "insufficient rights to complete the request",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
 
@@ -734,6 +770,18 @@ func (a *Application) updateApplication(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	if user.Role < 2 {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "insufficient rights to complete the request",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
 
