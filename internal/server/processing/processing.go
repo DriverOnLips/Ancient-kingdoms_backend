@@ -8,7 +8,6 @@ import (
 	"kingdoms/internal/server/models/responseModels"
 	"kingdoms/internal/server/models/serverModels"
 	"kingdoms/internal/server/redis"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -526,7 +525,6 @@ func (r *Repository) AddKingdomToApplication(user schema.User,
 		return StructApplicationWithKingdoms{}, err
 	}
 
-	log.Println(strconv.Itoa(int(kingdomAddToApplication.ApplicationId)))
 	applicationToReturn, err := r.GetApplicationWithKingdoms(user,
 		strconv.Itoa(int(kingdomAddToApplication.ApplicationId)))
 	if err != nil {
@@ -535,7 +533,8 @@ func (r *Repository) AddKingdomToApplication(user schema.User,
 	return applicationToReturn, nil
 }
 
-func (r *Repository) UpdateKingdomFromApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
+func (r *Repository) UpdateKingdomFromApplication(user schema.User,
+	kingdomAddToApplication KingdomAddToApplication) (StructApplicationWithKingdoms, error) {
 	var tx *gorm.DB = r.db
 
 	var draft schema.RulerApplication
@@ -552,10 +551,10 @@ func (r *Repository) UpdateKingdomFromApplication(user schema.User, kingdomAddTo
 		Where("creator_refer = ?", user.Id).
 		First(&app).Error
 	if err != nil {
-		return err
+		return StructApplicationWithKingdoms{}, err
 	}
 	if app == (schema.RulerApplication{}) {
-		return errors.New("no necessary application found")
+		return StructApplicationWithKingdoms{}, errors.New("no necessary application found")
 	}
 
 	var kingdom2Application = schema.Kingdom2Application{
@@ -570,10 +569,16 @@ func (r *Repository) UpdateKingdomFromApplication(user schema.User, kingdomAddTo
 			kingdom2Application.ApplicationRefer, kingdom2Application.KingdomRefer).
 		Updates(kingdom2Application).Error
 	if err != nil {
-		return err
+		return StructApplicationWithKingdoms{}, err
 	}
 
-	return nil
+	applicationToReturn, err := r.GetApplicationWithKingdoms(user,
+		strconv.Itoa(int(kingdomAddToApplication.ApplicationId)))
+	if err != nil {
+		return StructApplicationWithKingdoms{}, err
+	}
+
+	return applicationToReturn, nil
 }
 
 func (r *Repository) DeleteKingdomFromApplication(user schema.User,

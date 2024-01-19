@@ -81,7 +81,6 @@ func (a *Application) StartServer() {
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
 
 	a.r.POST("kingdom/create", a.createKingdom)
-	// a.r.POST("application/create", a.createApplication)
 
 	a.r.PUT("kingdom/update", a.updateKingdom)
 	a.r.PUT("kingdom/update/status", a.updateKingdomStatus)
@@ -947,7 +946,7 @@ func (a *Application) addKingdomToApplication(ctx *gin.Context) {
 			Code:    500,
 			Status:  "error",
 			Message: "error adding kingdom to application: " + err.Error(),
-			Body:    applicationToReturn,
+			Body:    nil,
 		}
 
 		ctx.JSON(http.StatusInternalServerError, response)
@@ -958,7 +957,7 @@ func (a *Application) addKingdomToApplication(ctx *gin.Context) {
 		Code:    200,
 		Status:  "ok",
 		Message: "kingdom added to application successfully",
-		Body:    nil,
+		Body:    applicationToReturn,
 	}
 
 	ctx.JSON(http.StatusOK, response)
@@ -997,7 +996,7 @@ func (a *Application) updateKingdomFromApplication(ctx *gin.Context) {
 		return
 	}
 
-	err = a.repo.UpdateKingdomFromApplication(*user, updateKingdomFromApplication)
+	applicationToReturn, err := a.repo.UpdateKingdomFromApplication(*user, updateKingdomFromApplication)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -1014,7 +1013,7 @@ func (a *Application) updateKingdomFromApplication(ctx *gin.Context) {
 		Code:    200,
 		Status:  "ok",
 		Message: "kingdom added to application successfully",
-		Body:    nil,
+		Body:    applicationToReturn,
 	}
 
 	ctx.JSON(http.StatusOK, response)
