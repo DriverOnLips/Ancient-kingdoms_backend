@@ -175,7 +175,34 @@ func (a *Application) sendRequestToAsyncServer(applicationToSend processing.Asyn
 }
 
 func (a *Application) getKingdomsFeed(ctx *gin.Context) {
-	kingdomName := ctx.Query("Kingdom_name") // TODO окно для пагинации
+	kingdomName := ctx.Query("Kingdom_name")
+
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		kingdoms, err := a.repo.GetKingdoms(kingdomName)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "error getting necessary kingdoms: " + err.Error(),
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
+
+			return
+		}
+
+		response := responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "kingdoms found",
+			Body:    map[string]interface{}{"Kingdoms": kingdoms, "Draft_Application": 0},
+		}
+
+		ctx.JSON(http.StatusOK, response)
+		return
+	}
 
 	kingdoms, err := a.repo.GetKingdoms(kingdomName)
 	if err != nil {
@@ -191,11 +218,37 @@ func (a *Application) getKingdomsFeed(ctx *gin.Context) {
 		return
 	}
 
-	response := responseModels.ResponseDefault{
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	draftApplication, err := a.repo.GetDraftApplication(*user)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user draft application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
 		Code:    200,
 		Status:  "ok",
 		Message: "kingdoms found",
-		Body:    kingdoms,
+		Body:    map[string]interface{}{"Kingdoms": kingdoms, "Draft_Application": draftApplication},
 	}
 
 	ctx.JSON(http.StatusOK, response)

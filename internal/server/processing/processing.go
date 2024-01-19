@@ -183,6 +183,24 @@ func (r *Repository) UpdateKingdomStatus(kingdomToUpdate KingdomToUpdate) error 
 	return nil
 }
 
+func (r *Repository) GetDraftApplication(user schema.User) (int, error) {
+	var applicationToReturn schema.RulerApplication
+
+	var tx *gorm.DB = r.db
+
+	err := tx.Where("creator_refer = ? and state = 'В разработке'", user.Id).
+		Find(&applicationToReturn).Error
+	if err != nil {
+		return 0, err
+	}
+
+	if applicationToReturn == (schema.RulerApplication{}) {
+		return 0, nil
+	}
+
+	return int(applicationToReturn.Id), nil
+}
+
 func (r *Repository) GetApplications(user schema.User, applicationId string) ([]schema.RulerApplication, error) {
 	var applicationsToReturn []schema.RulerApplication
 
@@ -466,9 +484,16 @@ func (r *Repository) UpdateApplication(user schema.User,
 func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
 	var tx *gorm.DB = r.db
 
-	var app schema.RulerApplication
-
+	var draft schema.RulerApplication
 	err := tx.Model(&schema.RulerApplication{}).
+		Where("creator_refer = ?", user.Id).
+		Where("state = 'В разработке'").
+		First(&draft).Error
+
+	kingdomAddToApplication.ApplicationId = draft.Id
+
+	var app schema.RulerApplication
+	err = tx.Model(&schema.RulerApplication{}).
 		Where("id = ?", kingdomAddToApplication.ApplicationId).
 		Where("creator_refer = ?", user.Id).
 		First(&app).Error
@@ -497,9 +522,16 @@ func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToAppli
 func (r *Repository) UpdateKingdomFromApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
 	var tx *gorm.DB = r.db
 
-	var app schema.RulerApplication
-
+	var draft schema.RulerApplication
 	err := tx.Model(&schema.RulerApplication{}).
+		Where("creator_refer = ?", user.Id).
+		Where("state = 'В разработке'").
+		First(&draft).Error
+
+	kingdomAddToApplication.ApplicationId = draft.Id
+
+	var app schema.RulerApplication
+	err = tx.Model(&schema.RulerApplication{}).
 		Where("id = ?", kingdomAddToApplication.ApplicationId).
 		Where("creator_refer = ?", user.Id).
 		First(&app).Error
