@@ -2,6 +2,7 @@ package schema
 
 import (
 	role "kingdoms/internal/server/app/userRole"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -26,17 +27,17 @@ type User struct {
 }
 
 type RulerApplication struct {
-	Id           uint           `gorm:"primaryKey;AUTO_INCREMENT"`
-	State        string         `gorm:"type:varchar(50);not null"`
-	DateCreate   datatypes.Date `gorm:"not null;default:CURRENT_DATE"`
-	DateSend     datatypes.Date
-	DateComplete datatypes.Date
-	Ruler        string `gorm:"type:varchar(50);not null"`
-	CreatorRefer int    `gorm:"not null"`
-	Creator      User   `gorm:"foreignKey:CreatorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	// ModeratorRefer int    `gorm:"not null"`
-	// Moderator      User   `gorm:"foreignKey:ModeratorRefer"`
-	Check bool `gorm:"type:boolean"`
+	Id             uint      `gorm:"primaryKey;AUTO_INCREMENT"`
+	State          string    `gorm:"type:varchar(50);not null"`
+	DateCreate     time.Time `gorm:"not null;default:now()"`
+	DateSend       time.Time
+	DateComplete   time.Time
+	Ruler          string `gorm:"type:varchar(50);not null"`
+	CreatorRefer   int    `gorm:"not null"`
+	Creator        User   `gorm:"foreignKey:CreatorRefer;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	ModeratorRefer *int
+	Moderator      User `gorm:"foreignKey:ModeratorRefer"`
+	Check          bool `gorm:"type:boolean"`
 }
 
 type Kingdom2Application struct {

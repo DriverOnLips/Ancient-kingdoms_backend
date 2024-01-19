@@ -77,16 +77,16 @@ func (a *Application) StartServer() {
 
 	a.r.GET("kingdoms", a.getKingdomsFeed)
 	a.r.GET("kingdom", a.getKingdom)
-	a.r.GET("applications", a.getApplications)
+	a.r.GET("applications", a.getAllApplications)
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
-	a.r.GET("applications/all", a.getAllApplications)
 
 	a.r.POST("kingdom/create", a.createKingdom)
 	a.r.POST("application/create", a.createApplication)
 
 	a.r.PUT("kingdom/update", a.updateKingdom)
 	a.r.PUT("kingdom/update/status", a.updateKingdomStatus)
-	a.r.PUT("application/status", a.updateApplicationStatus)
+	a.r.PUT("application/status/user", a.updateApplicationStatusUser)
+	a.r.PUT("application/status/moderator", a.updateApplicationStatusModerator)
 	a.r.PUT("application/update", a.updateApplication)
 	a.r.PUT("application/add_kingdom", a.addKingdomToApplication)
 	a.r.PUT("application/update_kingdom", a.updateKingdomFromApplication)
@@ -261,14 +261,8 @@ func (a *Application) createKingdom(ctx *gin.Context) {
 		return
 	}
 
-	if user.Role < 2 {
-		response := responseModels.ResponseDefault{
-			Code:    403,
-			Status:  "error",
-			Message: "insufficient rights to complete the request",
-			Body:    nil,
-		}
-
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
 		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
@@ -329,14 +323,8 @@ func (a *Application) updateKingdom(ctx *gin.Context) {
 		return
 	}
 
-	if user.Role < 2 {
-		response := responseModels.ResponseDefault{
-			Code:    403,
-			Status:  "error",
-			Message: "insufficient rights to complete the request",
-			Body:    nil,
-		}
-
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
 		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
@@ -410,14 +398,8 @@ func (a *Application) updateKingdomStatus(ctx *gin.Context) {
 		return
 	}
 
-	if user.Role < 2 {
-		response := responseModels.ResponseDefault{
-			Code:    403,
-			Status:  "error",
-			Message: "insufficient rights to complete the request",
-			Body:    nil,
-		}
-
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
 		ctx.JSON(http.StatusForbidden, response)
 		return
 	}
@@ -445,7 +427,7 @@ func (a *Application) updateKingdomStatus(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) getApplications(ctx *gin.Context) {
+func (a *Application) getAllApplications(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
 		ctx.JSON(response.Code, response)
@@ -465,37 +447,41 @@ func (a *Application) getApplications(ctx *gin.Context) {
 		return
 	}
 
-	applicationId := ctx.Query("Id")
+	all := ctx.Query("All")
 
-	applications, err := a.repo.GetApplications(*user, applicationId)
-	if err != nil {
-		response := responseModels.ResponseDefault{
-			Code:    500,
-			Status:  "error",
-			Message: "error getting necessary applications: " + err.Error(),
-			Body:    nil,
+	if all != "true" {
+		applicationId := ctx.Query("Id")
+
+		applications, err := a.repo.GetApplications(*user, applicationId)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "error getting necessary applications: " + err.Error(),
+				Body:    nil,
+			}
+			ctx.JSON(http.StatusInternalServerError, response)
+			return
 		}
-		ctx.JSON(http.StatusInternalServerError, response)
+
+		log.Println("adfa", applications)
+
+		response = responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "applications found",
+			Body:    applications,
+		}
+
+		ctx.JSON(http.StatusOK, response)
 		return
 	}
 
-	response = responseModels.ResponseDefault{
-		Code:    200,
-		Status:  "ok",
-		Message: "applications found",
-		Body:    applications,
-	}
-
-	ctx.JSON(http.StatusOK, response)
-}
-
-func (a *Application) getAllApplications(ctx *gin.Context) {
 	fromStr := strings.Split(ctx.Query("From"), "T")[0]
 	toStr := strings.Split(ctx.Query("To"), "T")[0]
 
 	var from time.Time
 	var to time.Time
-	var err error
 
 	if fromStr != "" {
 		from, err = time.Parse("2006-01-02", fromStr)
@@ -545,7 +531,7 @@ func (a *Application) getAllApplications(ctx *gin.Context) {
 		return
 	}
 
-	response := responseModels.ResponseDefault{
+	response = responseModels.ResponseDefault{
 		Code:    200,
 		Status:  "ok",
 		Message: "applications found",
@@ -695,7 +681,7 @@ func (a *Application) createApplication(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) updateApplicationStatus(ctx *gin.Context) {
+func (a *Application) updateApplicationStatusUser(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
 		ctx.JSON(response.Code, response)
@@ -728,7 +714,7 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 		return
 	}
 
-	application4Async, err := a.repo.UpdateApplicationStatus(*user, applicationToUpdate)
+	application4Async, err := a.repo.UpdateApplicationStatusUser(*user, applicationToUpdate)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
@@ -753,7 +739,7 @@ func (a *Application) updateApplicationStatus(ctx *gin.Context) {
 	a.sendRequestToAsyncServer(application4Async)
 }
 
-func (a *Application) updateApplication(ctx *gin.Context) {
+func (a *Application) updateApplicationStatusModerator(ctx *gin.Context) {
 	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
 	if response != (responseModels.ResponseDefault{}) {
 		ctx.JSON(response.Code, response)
@@ -773,15 +759,65 @@ func (a *Application) updateApplication(ctx *gin.Context) {
 		return
 	}
 
-	if user.Role < 2 {
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	var applicationToUpdate processing.ApplicationToUpdate
+	if err := ctx.BindJSON(&applicationToUpdate); err != nil {
 		response := responseModels.ResponseDefault{
-			Code:    403,
+			Code:    400,
 			Status:  "error",
-			Message: "insufficient rights to complete the request",
+			Message: "error parsing application:" + err.Error(),
 			Body:    nil,
 		}
 
-		ctx.JSON(http.StatusForbidden, response)
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.UpdateApplicationStatusModerator(*user, applicationToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating application status: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction status updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) updateApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
@@ -1316,4 +1352,19 @@ func (a *Application) logout(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, response)
+}
+
+func checkUserRights(user schema.User) (bool, responseModels.ResponseDefault) {
+	if user.Role < 2 {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "insufficient rights to complete the request",
+			Body:    nil,
+		}
+
+		return false, response
+	}
+
+	return true, responseModels.ResponseDefault{}
 }

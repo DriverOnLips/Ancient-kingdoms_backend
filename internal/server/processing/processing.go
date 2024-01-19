@@ -191,6 +191,8 @@ func (r *Repository) GetApplications(user schema.User, applicationId string) ([]
 	if applicationId == "" {
 		err := tx.Where("creator_refer = ? and state != 'Удалена'", user.Id).
 			Order("id").
+			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		if err != nil {
 			return []schema.RulerApplication{}, err
@@ -227,6 +229,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state != 'Удалена'").
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status == "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
@@ -234,6 +237,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state != 'Удалена' AND date_send < ?", params.To).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status == "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
@@ -241,6 +245,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state != 'Удалена' AND date_send > ?", params.From).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status == "" && params.From != datatypes.Date{} && params.To != datatypes.Date{}:
@@ -248,6 +253,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state != 'Удалена' AND date_send > ? AND date_send < ?", params.From, params.To).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status != "" && params.From == datatypes.Date{} && params.To == datatypes.Date{}:
@@ -255,6 +261,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state = ?", params.Status).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status != "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
@@ -262,6 +269,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state = ? AND date_send < ?", params.Status, params.To).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	case params.Status != "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
@@ -269,6 +277,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 			Where("state = ? AND date_send > ?", params.Status, params.From).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	default:
@@ -277,6 +286,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 				params.Status, params.From, params.To).
 			Order("id").
 			Preload("Creator").
+			Preload("Moderator").
 			Find(&applicationsToReturn).Error
 		break
 	}
@@ -334,9 +344,11 @@ func (r *Repository) GetApplicationWithKingdoms(user schema.User, applicationId 
 
 func (r *Repository) CreateApplication(user schema.User) (schema.RulerApplication, error) {
 	application := schema.RulerApplication{
-		Creator:    user,
-		State:      "В разработке",
-		DateCreate: datatypes.Date(time.Now()),
+		Creator:        user,
+		ModeratorRefer: nil,
+		Moderator:      schema.User{},
+		State:          "В разработке",
+		DateCreate:     time.Now(),
 	}
 
 	var tx *gorm.DB = r.db
@@ -349,7 +361,9 @@ func (r *Repository) CreateApplication(user schema.User) (schema.RulerApplicatio
 	return application, nil
 }
 
-func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpdate ApplicationToUpdate) (AsyncStructApplication, error) {
+func (r *Repository) UpdateApplicationStatusUser(user schema.User,
+	applicationToUpdate ApplicationToUpdate) (AsyncStructApplication, error) {
+
 	var tx *gorm.DB = r.db
 
 	var app schema.RulerApplication
@@ -365,46 +379,6 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 	}
 
 	switch applicationToUpdate.State {
-	case "На рассмотрении":
-		err = tx.Model(&schema.RulerApplication{}).
-			Where("id = ?", applicationToUpdate.Id).
-			Where("creator_refer = ?", user.Id).
-			Updates(map[string]interface{}{
-				"state":     applicationToUpdate.State,
-				"date_send": datatypes.Date(time.Now()),
-			}).Error
-		if err != nil {
-			return AsyncStructApplication{}, err
-		}
-
-		break
-
-	case "Одобрена":
-		err = tx.Model(&schema.RulerApplication{}).
-			Where("id = ?", applicationToUpdate.Id).
-			Where("creator_refer = ?", user.Id).
-			Updates(map[string]interface{}{
-				"state":         applicationToUpdate.State,
-				"date_complete": datatypes.Date(time.Now()),
-			}).Error
-		if err != nil {
-			return AsyncStructApplication{}, err
-		}
-		break
-
-	case "Отклонена":
-		err = tx.Model(&schema.RulerApplication{}).
-			Where("id = ?", applicationToUpdate.Id).
-			Where("creator_refer = ?", user.Id).
-			Updates(map[string]interface{}{
-				"state":         applicationToUpdate.State,
-				"date_complete": datatypes.Date(time.Now()),
-			}).Error
-		if err != nil {
-			return AsyncStructApplication{}, err
-		}
-		break
-
 	case "Удалена":
 		err = tx.Model(&schema.RulerApplication{}).
 			Where("id = ?", applicationToUpdate.Id).
@@ -416,6 +390,16 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 		break
 
 	default:
+		err = tx.Model(&schema.RulerApplication{}).
+			Where("id = ?", applicationToUpdate.Id).
+			Where("creator_refer = ?", user.Id).
+			Updates(map[string]interface{}{
+				"state":     applicationToUpdate.State,
+				"date_send": time.Now(),
+			}).Error
+		if err != nil {
+			return AsyncStructApplication{}, err
+		}
 		break
 	}
 
@@ -432,6 +416,36 @@ func (r *Repository) UpdateApplicationStatus(user schema.User, applicationToUpda
 		First(&applicationToReturn).Error
 
 	return applicationToReturn, nil
+}
+
+func (r *Repository) UpdateApplicationStatusModerator(user schema.User,
+	applicationToUpdate ApplicationToUpdate) error {
+
+	var tx *gorm.DB = r.db
+
+	var app schema.RulerApplication
+	err := tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToUpdate.Id).
+		First(&app).Error
+	if err != nil {
+		return err
+	}
+	if app == (schema.RulerApplication{}) {
+		return errors.New("no necessary application found")
+	}
+
+	err = tx.Model(&schema.RulerApplication{}).
+		Where("id = ?", applicationToUpdate.Id).
+		Updates(map[string]interface{}{
+			"state":           applicationToUpdate.State,
+			"date_complete":   time.Now(),
+			"moderator_refer": user.Id,
+		}).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *Repository) UpdateApplication(user schema.User,
