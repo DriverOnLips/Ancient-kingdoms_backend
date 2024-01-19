@@ -8,6 +8,8 @@ import (
 	"kingdoms/internal/server/models/responseModels"
 	"kingdoms/internal/server/models/serverModels"
 	"kingdoms/internal/server/redis"
+	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -524,7 +526,9 @@ func (r *Repository) AddKingdomToApplication(user schema.User,
 		return StructApplicationWithKingdoms{}, err
 	}
 
-	applicationToReturn, err := r.GetApplicationWithKingdoms(user, string(rune(kingdom2Application.Id)))
+	log.Println(strconv.Itoa(int(kingdomAddToApplication.ApplicationId)))
+	applicationToReturn, err := r.GetApplicationWithKingdoms(user,
+		strconv.Itoa(int(kingdomAddToApplication.ApplicationId)))
 	if err != nil {
 		return StructApplicationWithKingdoms{}, err
 	}
