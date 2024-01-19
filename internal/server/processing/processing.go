@@ -481,7 +481,8 @@ func (r *Repository) UpdateApplication(user schema.User,
 	return nil
 }
 
-func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {
+func (r *Repository) AddKingdomToApplication(user schema.User,
+	kingdomAddToApplication KingdomAddToApplication) (StructApplicationWithKingdoms, error) {
 	var tx *gorm.DB = r.db
 
 	var draft schema.RulerApplication
@@ -493,7 +494,7 @@ func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToAppli
 	if draft == (schema.RulerApplication{}) {
 		draft, err = r.CreateApplication(user)
 		if err != nil {
-			return err
+			return StructApplicationWithKingdoms{}, err
 		}
 	}
 
@@ -505,10 +506,10 @@ func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToAppli
 		Where("creator_refer = ?", user.Id).
 		First(&app).Error
 	if err != nil {
-		return err
+		return StructApplicationWithKingdoms{}, err
 	}
 	if app == (schema.RulerApplication{}) {
-		return errors.New("no necessary application found")
+		return StructApplicationWithKingdoms{}, errors.New("no necessary application found")
 	}
 
 	var kingdom2Application = schema.Kingdom2Application{
@@ -520,10 +521,14 @@ func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToAppli
 
 	err = r.db.Create(&kingdom2Application).Error
 	if err != nil {
-		return err
+		return StructApplicationWithKingdoms{}, err
 	}
 
-	return nil
+	applicationToReturn, err := r.GetApplicationWithKingdoms(user, string(rune(kingdom2Application.Id)))
+	if err != nil {
+		return StructApplicationWithKingdoms{}, err
+	}
+	return applicationToReturn, nil
 }
 
 func (r *Repository) UpdateKingdomFromApplication(user schema.User, kingdomAddToApplication KingdomAddToApplication) error {

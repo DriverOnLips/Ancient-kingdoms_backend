@@ -695,13 +695,13 @@ func (a *Application) createApplication(ctx *gin.Context) {
 
 	applicationToAdd.ApplicationId = application.Id
 
-	err = a.repo.AddKingdomToApplication(*user, applicationToAdd)
+	applicationToReturn, err := a.repo.AddKingdomToApplication(*user, applicationToAdd)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
 			Status:  "error",
 			Message: "error adding kingdom to application: " + err.Error(),
-			Body:    nil,
+			Body:    applicationToReturn,
 		}
 
 		ctx.JSON(http.StatusInternalServerError, response)
@@ -941,13 +941,13 @@ func (a *Application) addKingdomToApplication(ctx *gin.Context) {
 		return
 	}
 
-	err = a.repo.AddKingdomToApplication(*user, kingdomAddToApplication)
+	applicationToReturn, err := a.repo.AddKingdomToApplication(*user, kingdomAddToApplication)
 	if err != nil {
 		response := responseModels.ResponseDefault{
 			Code:    500,
 			Status:  "error",
 			Message: "error adding kingdom to application: " + err.Error(),
-			Body:    nil,
+			Body:    applicationToReturn,
 		}
 
 		ctx.JSON(http.StatusInternalServerError, response)
