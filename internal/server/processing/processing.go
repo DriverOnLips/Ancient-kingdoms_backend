@@ -490,6 +490,13 @@ func (r *Repository) AddKingdomToApplication(user schema.User, kingdomAddToAppli
 		Where("state = 'В разработке'").
 		First(&draft).Error
 
+	if draft == (schema.RulerApplication{}) {
+		draft, err = r.CreateApplication(user)
+		if err != nil {
+			return err
+		}
+	}
+
 	kingdomAddToApplication.ApplicationId = draft.Id
 
 	var app schema.RulerApplication

@@ -81,7 +81,7 @@ func (a *Application) StartServer() {
 	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
 
 	a.r.POST("kingdom/create", a.createKingdom)
-	a.r.POST("application/create", a.createApplication)
+	// a.r.POST("application/create", a.createApplication)
 
 	a.r.PUT("kingdom/update", a.updateKingdom)
 	a.r.PUT("kingdom/update/status", a.updateKingdomStatus)
@@ -516,8 +516,6 @@ func (a *Application) getAllApplications(ctx *gin.Context) {
 			ctx.JSON(http.StatusInternalServerError, response)
 			return
 		}
-
-		log.Println("adfa", applications)
 
 		response = responseModels.ResponseDefault{
 			Code:    200,
