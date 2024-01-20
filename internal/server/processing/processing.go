@@ -245,7 +245,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 	switch {
 	case params.Status == "" && params.From == datatypes.Date{} && params.To == datatypes.Date{}:
 		err = r.db.
-			Where("state != 'Удалена'").
+			Where("state != 'Удалена' AND state != 'В разработке'").
 			Order("id").
 			Preload("Creator").
 			Preload("Moderator").
@@ -253,7 +253,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 		break
 	case params.Status == "" && params.From == datatypes.Date{} && params.To != datatypes.Date{}:
 		err = r.db.
-			Where("state != 'Удалена' AND date_send < ?", params.To).
+			Where("state != 'Удалена' AND state != 'В разработке' AND date_send < ?", params.To).
 			Order("id").
 			Preload("Creator").
 			Preload("Moderator").
@@ -261,7 +261,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 		break
 	case params.Status == "" && params.From != datatypes.Date{} && params.To == datatypes.Date{}:
 		err = r.db.
-			Where("state != 'Удалена' AND date_send > ?", params.From).
+			Where("state != 'Удалена' AND state != 'В разработке' AND date_send > ?", params.From).
 			Order("id").
 			Preload("Creator").
 			Preload("Moderator").
@@ -269,7 +269,7 @@ func (r *Repository) GetAllApplications(params StructGetAllApplications) ([]sche
 		break
 	case params.Status == "" && params.From != datatypes.Date{} && params.To != datatypes.Date{}:
 		err = r.db.
-			Where("state != 'Удалена' AND date_send > ? AND date_send < ?", params.From, params.To).
+			Where("state != 'Удалена' AND state != 'В разработке' AND date_send > ? AND date_send < ?", params.From, params.To).
 			Order("id").
 			Preload("Creator").
 			Preload("Moderator").
