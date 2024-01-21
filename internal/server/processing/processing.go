@@ -130,6 +130,7 @@ func (r *Repository) GetKingdoms(kingdomName string) ([]schema.Kingdom, error) {
 	var tx *gorm.DB = r.db
 
 	err := tx.Where("name LIKE " + "'%" + kingdomName + "%'").
+		Where("state != 'Данные утеряны'").
 		Order("id").Find(&kingdomsToReturn).Error
 	if err != nil {
 		return []schema.Kingdom{}, err
