@@ -3,7 +3,8 @@ package app
 import (
 	"errors"
 	role "kingdoms/internal/server/app/userRole"
-	"log"
+	"kingdoms/internal/server/models/responseModels"
+	"kingdoms/internal/server/models/serverModels"
 	"net/http"
 	"strings"
 
@@ -12,54 +13,101 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
-const jwtPrefix = "Bearer "
+const jwtPrefix = "Bearer"
 
 func (a *Application) WithAuthCheck(assignedRoles ...role.Role) func(ctx *gin.Context) {
-	return func(gCtx *gin.Context) {
-		jwtStr := gCtx.GetHeader("Authorization")
-		if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-			gCtx.AbortWithStatus(http.StatusForbidden) // отдаем что нет доступа
+	return func(ctx *gin.Context) {
+		jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
+		if cookieErr != nil {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "error getting cookie",
+				Body:    nil,
+			}
 
-			return // завершаем обработку
+			ctx.JSON(http.StatusInternalServerError, response)
+			return
 		}
 
-		// отрезаем префикс
+		if !strings.HasPrefix(jwtStr, jwtPrefix) {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "error parsing jwt token: no prefix",
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
+			return
+		}
+
 		jwtStr = jwtStr[len(jwtPrefix):]
-		// проверяем jwt в блеклист редиса
-		err := a.redis.CheckJWTInBlacklist(gCtx.Request.Context(), jwtStr)
-		if err == nil { // значит что токен в блеклисте
-			gCtx.AbortWithStatus(http.StatusForbidden)
 
+		err := a.redis.CheckJWTInBlacklist(ctx.Request.Context(), jwtStr)
+		if err == nil {
+			response := responseModels.ResponseDefault{
+				Code:    403,
+				Status:  "error",
+				Message: "not authorized: token in black list",
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusForbidden, response)
 			return
 		}
-		if !errors.Is(err, redis.Nil) { // значит что это не ошибка отсуствия - внутренняя ошибка
-			gCtx.AbortWithError(http.StatusInternalServerError, err)
+		if !errors.Is(err, redis.Nil) {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "server error: " + err.Error(),
+				Body:    nil,
+			}
 
+			ctx.JSON(http.StatusInternalServerError, response)
 			return
 		}
 
-		token, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 			return []byte(a.config.JWT.Token), nil
 		})
 		if err != nil {
-			gCtx.AbortWithStatus(http.StatusForbidden)
-			log.Println(err)
+			response := responseModels.ResponseDefault{
+				Code:    403,
+				Status:  "error",
+				Message: "error parsing jwt token: error parsing with claims:" + err.Error(),
+				Body:    nil,
+			}
 
+			ctx.JSON(http.StatusForbidden, response)
 			return
 		}
 
-		myClaims := token.Claims.(*ds.JWTClaims)
+		myClaims := token.Claims.(*serverModels.JWTClaims)
+
+		isAssigned := false
 
 		for _, oneOfAssignedRole := range assignedRoles {
 			if myClaims.Role == oneOfAssignedRole {
-				gCtx.Next()
+				isAssigned = true
+				break
 			}
 		}
-		gCtx.AbortWithStatus(http.StatusForbidden)
-		log.Printf("role %s is not assigned in %s", myClaims.Role, assignedRoles)
 
-		return
+		if !isAssigned {
+			ctx.AbortWithStatus(http.StatusForbidden)
+			response := responseModels.ResponseDefault{
+				Code:    403,
+				Status:  "error",
+				Message: "role " + string(rune(myClaims.Role)) + " is not assigned",
+				Body:    nil,
+			}
 
+			ctx.JSON(http.StatusForbidden, response)
+			return
+		}
+
+		// ctx.Set("user_role", myClaims.Role)
+		// ctx.Set("userUUID", myClaims.UserUUID)
 	}
-
 }

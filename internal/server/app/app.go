@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +18,7 @@ import (
 	"kingdoms/internal/database/connect"
 	"kingdoms/internal/database/schema"
 	role "kingdoms/internal/server/app/userRole"
-	requestsModels "kingdoms/internal/server/models/requestModels"
+	"kingdoms/internal/server/models/responseModels"
 	"kingdoms/internal/server/models/serverModels"
 	"kingdoms/internal/server/redis"
 
@@ -25,7 +27,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 )
+
+const ASYNC_KEY = "secret"
 
 type Application struct {
 	config *config.Config
@@ -70,30 +75,27 @@ func (a *Application) StartServer() {
 
 	a.r = gin.Default()
 
-	a.r.GET("kingdoms", a.getKingdoms)
+	a.r.GET("kingdoms", a.getKingdomsFeed)
 	a.r.GET("kingdom", a.getKingdom)
-	a.r.GET("rulers", a.getRulers)
-	a.r.GET("ruler", a.getRuler)
+	a.r.GET("applications", a.getAllApplications)
+	a.r.GET("application/with_kingdoms", a.getApplicationWithKingdoms)
 
-	a.r.POST("kingdom/add", a.addKingdom)
-	a.r.PUT("kingdom/edit", a.editKingdom)
-	a.r.PUT("kingdom/ruler_to_kingdom", a.CreateRulerForKingdom)
+	a.r.POST("kingdom/create", a.createKingdom)
 
-	a.r.PUT("ruler/edit", a.editRuler)
-	a.r.PUT("ruler/state_change/moderator", a.rulerStateChangeModerator)
-	a.r.PUT("ruler/state_change/user", a.rulerStateChangeUser)
+	a.r.PUT("kingdom/update", a.updateKingdom)
+	a.r.PUT("kingdom/update/status", a.updateKingdomStatus)
+	a.r.PUT("application/status/user", a.updateApplicationStatusUser)
+	a.r.PUT("application/status/moderator", a.updateApplicationStatusModerator)
+	a.r.PUT("application/update", a.updateApplication)
+	a.r.PUT("application/add_kingdom", a.addKingdomToApplication)
+	a.r.PUT("application/update_kingdom", a.updateKingdomFromApplication)
 
-	a.r.PUT("kingdom/delete/:kingdom_name", a.deleteKingdom)
-	a.r.PUT("kingdom/ruler/:ruler_name", a.deleteRuler)
+	a.r.DELETE("application/delete_kingdom", a.deleteKingdomFromApplication)
+	a.r.DELETE("application/delete", a.deleteApplication)
 
-	a.r.DELETE("kingdom_ruler_delete/:kingdom_name/:ruler_name/:ruling_id", a.deleteKingdomRuler)
+	a.r.PUT("async/application", a.asyncPutApplicationInfo)
 
-	// // никто не имеет доступа
-	a.r.Use(a.WithAuthCheck()).GET("login", a.login)
-	// // или ниженаписанное значит что доступ имеют менеджер и админ
-	// a.r.Use(a.WithAuthCheck(role.Manager, role.Admin)).GET("/ping", a.login)
-
-	// a.r.GET("login", a.checkLogin)
+	a.r.GET("login", a.checkLogin)
 	a.r.POST("login", a.login)
 	a.r.POST("signup", a.signup)
 	a.r.DELETE("logout", a.logout)
@@ -103,26 +105,108 @@ func (a *Application) StartServer() {
 	log.Println("Server is down")
 }
 
-type Response struct {
-	Status  string      `json:"status"`
-	Message string      `json:"message"`
-	Body    interface{} `json:"body"`
-}
+func (a *Application) asyncPutApplicationInfo(ctx *gin.Context) {
+	key := ctx.GetHeader("AsyncKey")
+	if key != ASYNC_KEY {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "error getting async server key",
+			Body:    nil,
+		}
 
-func (a *Application) getKingdoms(ctx *gin.Context) {
-	name := ctx.Query("kingdomName")
-	ruler := ctx.Query("rulerName")
-	state := ctx.Query("state")
-
-	requestBody := requestsModels.GetKingdomsRequest{
-		KingdomName: name,
-		RulerName:   ruler,
-		State:       state,
+		ctx.JSON(http.StatusForbidden, response)
+		return
 	}
 
-	kingdoms, err := a.repo.GetKingdoms(requestBody)
+	var applicationToPut processing.AsyncStructApplication
+	bodyBytes, _ := ioutil.ReadAll(ctx.Request.Body)
+	err := json.Unmarshal(bodyBytes, &applicationToPut)
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+
+		fmt.Println(err.Error())
+
+		return
+	}
+
+	err = a.repo.AsyncPutApplicationInfo(applicationToPut)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) sendRequestToAsyncServer(applicationToSend processing.AsyncStructApplication) {
+	data := url.Values{
+		"Id":    {strconv.Itoa(int(applicationToSend.Id))},
+		"Check": {strconv.FormatBool(applicationToSend.Check)},
+	}
+
+	resp, err := http.PostForm("http://0.0.0.0:8080/", data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+}
+
+func (a *Application) getKingdomsFeed(ctx *gin.Context) {
+	kingdomName := ctx.Query("Kingdom_name")
+
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		kingdoms, err := a.repo.GetKingdoms(kingdomName)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "error getting necessary kingdoms: " + err.Error(),
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
+
+			return
+		}
+
+		response := responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "kingdoms found",
+			Body:    map[string]interface{}{"Kingdoms": kingdoms, "Draft_Application": 0},
+		}
+
+		ctx.JSON(http.StatusOK, response)
+		return
+	}
+
+	kingdoms, err := a.repo.GetKingdoms(kingdomName)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
 			Message: "error getting necessary kingdoms: " + err.Error(),
 			Body:    nil,
@@ -133,36 +217,64 @@ func (a *Application) getKingdoms(ctx *gin.Context) {
 		return
 	}
 
-	response := Response{
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	draftApplication, err := a.repo.GetDraftApplication(*user)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user draft application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
 		Status:  "ok",
 		Message: "kingdoms found",
-		Body:    kingdoms,
+		Body:    map[string]interface{}{"Kingdoms": kingdoms, "Draft_Application": draftApplication},
 	}
 
 	ctx.JSON(http.StatusOK, response)
 }
 
 func (a *Application) getKingdom(ctx *gin.Context) {
-	var kingdom schema.Kingdom
-	kingdomID, err := strconv.Atoi(ctx.Query("id"))
-
-	fmt.Println(ctx)
-
+	kingdomID, err := strconv.Atoi(ctx.Query("Id"))
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
-			Message: "error getting kingdom ID: " + err.Error(),
+			Message: "error getting kingdom by ID: " + err.Error(),
 			Body:    nil,
 		}
+
 		ctx.JSON(http.StatusInternalServerError, response)
+
 		return
 	}
 
+	var kingdom schema.Kingdom
 	kingdom.Id = uint(kingdomID)
 
 	kingdom, err = a.repo.GetKingdom(kingdom)
 	if err != nil {
-		response := Response{
+		response := responseModels.ResponseDefault{
+			Code:    500,
 			Status:  "error",
 			Message: "error getting necessary kingdom: " + err.Error(),
 			Body:    nil,
@@ -171,7 +283,8 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 		return
 	}
 
-	response := Response{
+	response := responseModels.ResponseDefault{
+		Code:    200,
 		Status:  "ok",
 		Message: "kingdom found",
 		Body:    kingdom,
@@ -180,389 +293,1128 @@ func (a *Application) getKingdom(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) getRulers(ctx *gin.Context) {
-	var requestBody requestsModels.GetRulersRequest
-	if err := ctx.BindJSON(&requestBody); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
+func (a *Application) createKingdom(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	rulers, err := a.repo.GetRulers(requestBody)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error getting rulers:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.JSON(http.StatusFound, rulers)
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	var kingdomToCreate schema.Kingdom
+	if err := ctx.BindJSON(&kingdomToCreate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.CreateKingdom(kingdomToCreate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error creating kingdom: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom created successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) getRuler(ctx *gin.Context) {
-	var ruler schema.Ruler
-	if err := ctx.BindJSON(&ruler); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
+func (a *Application) updateKingdom(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	necessaryRuler, err := a.repo.GetRuler(ruler)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error getting ruler:"+err.Error())
-		return
-	}
-	if necessaryRuler == (schema.Ruler{}) {
-		ctx.String(http.StatusNotFound, "no necessary ruler")
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.JSON(http.StatusFound, necessaryRuler)
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	var kingdomToUpdate schema.Kingdom
+	if err := ctx.BindJSON(&kingdomToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.UpdateKingdom(kingdomToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating kingdom: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) addKingdom(ctx *gin.Context) {
-	var kingdom schema.Kingdom
-	if err := ctx.BindJSON(&kingdom); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
+func (a *Application) updateKingdomStatus(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	err := a.repo.CreateKingdom(kingdom)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error creating kingdom:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.String(http.StatusCreated, "creating kingdom done successfully")
+	var kingdomToUpdate processing.KingdomToUpdate
+	if err := ctx.BindJSON(&kingdomToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	err = a.repo.UpdateKingdomStatus(kingdomToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating status kingdom: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom status updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) editKingdom(ctx *gin.Context) {
-	var kingdom schema.Kingdom
-	if err := ctx.BindJSON(&kingdom); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing ruler")
+func (a *Application) getAllApplications(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	err := a.repo.EditKingdom(kingdom)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error editing kingdom:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.JSON(http.StatusNoContent, kingdom)
+	all := ctx.Query("All")
+
+	if all != "true" {
+		applicationId := ctx.Query("Id")
+
+		applications, err := a.repo.GetApplications(*user, applicationId)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "error getting necessary applications: " + err.Error(),
+				Body:    nil,
+			}
+			ctx.JSON(http.StatusInternalServerError, response)
+			return
+		}
+
+		response = responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "applications found",
+			Body:    applications,
+		}
+
+		ctx.JSON(http.StatusOK, response)
+		return
+	}
+
+	fromStr := strings.Split(ctx.Query("From"), "T")[0]
+	toStr := strings.Split(ctx.Query("To"), "T")[0]
+
+	var from time.Time
+	var to time.Time
+
+	if fromStr != "" {
+		from, err = time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    400,
+				Status:  "error",
+				Message: "error parsing dateFrom: " + err.Error(),
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusBadRequest, response)
+			return
+		}
+	}
+
+	if toStr != "" {
+		to, err = time.Parse("2006-01-02", toStr)
+		if err != nil {
+			response := responseModels.ResponseDefault{
+				Code:    400,
+				Status:  "error",
+				Message: "error parsing dateTo: " + err.Error(),
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusBadRequest, response)
+			return
+		}
+	}
+
+	params := processing.StructGetAllApplications{
+		Status: ctx.Query("Status"),
+		From:   datatypes.Date(from),
+		To:     datatypes.Date(to),
+	}
+
+	applications, err := a.repo.GetAllApplications(params)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary applications: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "applications found",
+		Body:    applications,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) CreateRulerForKingdom(ctx *gin.Context) {
-	var requestBody requestsModels.CreateRulerForKingdomRequest
-	if err := ctx.BindJSON(&requestBody); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing kingdom:"+err.Error())
+func (a *Application) getApplicationWithKingdoms(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	err := a.repo.CreateRulerForKingdom(requestBody)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error ruler for kingdom additing:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "additing done successfully")
+	applicationId := ctx.Query("Id")
+	if applicationId == "" {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error no id provided",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	application, err := a.repo.GetApplicationWithKingdoms(*user, applicationId)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary kingdoms from application: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdoms from application found",
+		Body:    application,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) editRuler(ctx *gin.Context) {
-	var ruler schema.Ruler
-	if err := ctx.BindJSON(&ruler); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing ruler:"+err.Error())
+func (a *Application) createApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	err := a.repo.EditRuler(ruler)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error editing ruler:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "edditing ruler done successfully")
+	var applicationToAdd processing.KingdomAddToApplication
+	if err := ctx.BindJSON(&applicationToAdd); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	application, err := a.repo.CreateApplication(*user)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error creating application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	applicationToAdd.ApplicationId = application.Id
+
+	applicationToReturn, err := a.repo.AddKingdomToApplication(*user, applicationToAdd)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error adding kingdom to application: " + err.Error(),
+			Body:    applicationToReturn,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	applicationWithKingdoms, err := a.repo.GetApplicationWithKingdoms(*user,
+		strconv.Itoa(int(applicationToAdd.ApplicationId)))
+
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting necessary kingdoms from application: " + err.Error(),
+			Body:    nil,
+		}
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdoms from application found",
+		Body:    applicationWithKingdoms,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) rulerStateChangeModerator(ctx *gin.Context) {
-	var requestBody requestsModels.RulerStateChangeRequest
-	if err := ctx.BindJSON(&requestBody); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
+func (a *Application) updateApplicationStatusUser(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	userRole, err := a.repo.GetUserRole(requestBody.User)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusBadRequest, "error getting user role:"+err.Error())
-		return
-	}
-	if userRole != "admin" {
-		ctx.String(http.StatusUnauthorized, "no enouth rules for executing this operation")
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	err = a.repo.RulerStateChange(requestBody.ID, requestBody.State)
+	var applicationToUpdate processing.ApplicationToUpdate
+	if err := ctx.BindJSON(&applicationToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	application4Async, err := a.repo.UpdateApplicationStatusUser(*user, applicationToUpdate)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error ruler state changing:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating application status: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "ruler state changing done successfully")
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction status updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+
+	a.sendRequestToAsyncServer(application4Async)
 }
 
-func (a *Application) rulerStateChangeUser(ctx *gin.Context) {
-	var requestBody requestsModels.RulerStateChangeRequest
-	if err := ctx.BindJSON(&requestBody); err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing request body:"+err.Error())
+func (a *Application) updateApplicationStatusModerator(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	userRole, err := a.repo.GetUserRole(requestBody.User)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusBadRequest, "error getting user role:"+err.Error())
-		return
-	}
-	if userRole != "user" && userRole != "admin" {
-		ctx.String(http.StatusUnauthorized, "no enouth rules for executing this operation")
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	err = a.repo.RulerStateChange(requestBody.ID, requestBody.State)
+	haveRights, response := checkUserRights(*user)
+	if !haveRights {
+		ctx.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	var applicationToUpdate processing.ApplicationToUpdate
+	if err := ctx.BindJSON(&applicationToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.UpdateApplicationStatusModerator(*user, applicationToUpdate)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error ruler state changing:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating application status: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "ruler state changing done successfully")
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction status updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) deleteKingdom(ctx *gin.Context) {
-	kingdomName := ctx.Param("kingdom_name")
-
-	err := a.repo.DeleteKingdom(kingdomName)
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error deleting kingdom:"+err.Error())
+func (a *Application) updateApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "deleting kingdom done successfully")
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var applicationToUpdate schema.RulerApplication
+	if err := ctx.BindJSON(&applicationToUpdate); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.UpdateApplication(*user, applicationToUpdate)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error updating application ruler: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "appliction ruler updated successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) deleteRuler(ctx *gin.Context) {
-	rulerName := ctx.Param("ruler_name")
-
-	err := a.repo.DeleteRuler(rulerName)
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error deleting ruler:"+err.Error())
+func (a *Application) addKingdomToApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "deleting ruler done successfully")
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var kingdomAddToApplication processing.KingdomAddToApplication
+	if err := ctx.BindJSON(&kingdomAddToApplication); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom or application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	applicationToReturn, err := a.repo.AddKingdomToApplication(*user, kingdomAddToApplication)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error adding kingdom to application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom added to application successfully",
+		Body:    applicationToReturn,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func (a *Application) deleteKingdomRuler(ctx *gin.Context) {
-	kingdomName := ctx.Param("kingdom_name")
-
-	rulerName := ctx.Param("ruler_name")
-
-	rulingID, err := strconv.Atoi(ctx.Param("ruling_id"))
-	if err != nil {
-		ctx.String(http.StatusBadRequest, "error parsing rulingID")
+func (a *Application) updateKingdomFromApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
 		return
 	}
 
-	err = a.repo.DeleteKingdomRuler(kingdomName, rulerName, rulingID)
+	user, err := a.repo.GetUserByName(myClaims.Name)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "error delering kingdom ruler:"+err.Error())
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	ctx.String(http.StatusNoContent, "deleting kingdom ruler done successfully")
+	var updateKingdomFromApplication processing.KingdomAddToApplication
+	if err := ctx.BindJSON(&updateKingdomFromApplication); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom or application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	applicationToReturn, err := a.repo.UpdateKingdomFromApplication(*user, updateKingdomFromApplication)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error adding kingdom to application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom added to application successfully",
+		Body:    applicationToReturn,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) deleteKingdomFromApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var kingdomToDeleteFromApplication processing.DeleteKingdomFromApplication
+	if err := ctx.BindJSON(&kingdomToDeleteFromApplication); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing kingdom or application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.DeleteKingdomFromApplication(*user, kingdomToDeleteFromApplication)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error deleting kingdom from application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "kingdom deleted from application successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (a *Application) deleteApplication(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
+
+	user, err := a.repo.GetUserByName(myClaims.Name)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	var applicatinToDelete schema.RulerApplication
+	if err := ctx.BindJSON(&applicatinToDelete); err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing application:" + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
+
+	err = a.repo.DeleteApplication(*user, applicatinToDelete)
+	if err != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error deleting application: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "application deleted successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (a *Application) checkLogin(ctx *gin.Context) {
+	myClaims, response := a.repo.FoundUserFromHeader(ctx, a.redis, a.config)
+	if response != (responseModels.ResponseDefault{}) {
+		ctx.JSON(response.Code, response)
+		return
+	}
 
+	assignedRoles := [...]role.Role{role.Unknown, role.Buyer, role.Manager, role.Admin}
+
+	for _, oneOfAssignedRole := range assignedRoles {
+		if myClaims.Role == oneOfAssignedRole {
+			response := responseModels.ResponseDefault{
+				Code:    200,
+				Status:  "ok",
+				Message: "authorized",
+				Body: map[string]interface{}{
+					"Id":   myClaims.Id,
+					"Name": myClaims.Name,
+					"Role": oneOfAssignedRole,
+				},
+			}
+
+			ctx.JSON(http.StatusOK, response)
+			return
+		}
+	}
+
+	response = responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "not authorized: no role found",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
+	return
 }
 
-func (a *Application) login(gCtx *gin.Context) {
+func (a *Application) login(ctx *gin.Context) {
 	cfg := a.config
-	req := &loginReq{}
+	request := &serverModels.LoginRequest{}
 
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	err := json.NewDecoder(ctx.Request.Body).Decode(request)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing request params: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
-	user, err := a.repo.GetUserByName(req.Login)
+	user, err := a.repo.GetUserByName(request.Name)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting user by name: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	if req.Login == user.Name && user.Pass == generateHashString(req.Password) {
-		// значит проверка пройдена
-		// генерируем ему jwt
+	if request.Name == user.Name && user.Password == generateHashString(request.Password) {
 		token := jwt.NewWithClaims(cfg.JWT.SigningMethod, &serverModels.JWTClaims{
 			StandardClaims: jwt.StandardClaims{
 				ExpiresAt: time.Now().Add(cfg.JWT.ExpiresIn).Unix(),
 				IssuedAt:  time.Now().Unix(),
 				Issuer:    "bitop-admin",
 			},
-			UserUUID: uuid.New(), // test uuid
+			UserUUID: uuid.New(),
+			Id:       user.Id,
+			Name:     user.Name,
 			Role:     user.Role,
 		})
 		if token == nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("token is nil"))
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "token is nil",
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
 			return
 		}
 
 		strToken, err := token.SignedString([]byte(cfg.JWT.Token))
 		if err != nil {
-			gCtx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cant create str token"))
+			response := responseModels.ResponseDefault{
+				Code:    500,
+				Status:  "error",
+				Message: "cant create str token",
+				Body:    nil,
+			}
+
+			ctx.JSON(http.StatusInternalServerError, response)
 			return
 		}
 
-		gCtx.JSON(http.StatusOK, serverModels.LoginResponce{
-			ExpiresIn:   cfg.JWT.ExpiresIn,
-			AccessToken: strToken,
-			TokenType:   "Bearer",
-		})
+		ctx.SetCookie("kingdoms-token", jwtPrefix+strToken, int(cfg.JWT.ExpiresIn), "", "", true, true)
+
+		response := responseModels.ResponseDefault{
+			Code:    200,
+			Status:  "ok",
+			Message: "user session starts successfully",
+			Body: map[string]interface{}{
+				"Id":   user.Id,
+				"Role": user.Role,
+				"Name": user.Name,
+			},
+		}
+
+		ctx.JSON(http.StatusOK, response)
+		return
 	}
 
-	gCtx.AbortWithStatus(http.StatusForbidden) // отдаем 403 ответ в знак того что доступ запрещен
+	response := responseModels.ResponseDefault{
+		Code:    403,
+		Status:  "error",
+		Message: "incorrect user data",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusForbidden, response)
 }
 
-func (a *Application) signup(gCtx *gin.Context) {
-	req := &registerReq{}
+func (a *Application) signup(ctx *gin.Context) {
+	request := &serverModels.RegisterRequest{}
 
-	err := json.NewDecoder(gCtx.Request.Body).Decode(req)
+	err := json.NewDecoder(ctx.Request.Body).Decode(request)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "error parsing request params: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
-	if req.Pass == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("pass is empty"))
+	if request.Password == "" {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "password is empty",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
-	if req.Name == "" {
-		gCtx.AbortWithError(http.StatusBadRequest, fmt.Errorf("name is empty"))
+	if request.Name == "" {
+		response := responseModels.ResponseDefault{
+			Code:    400,
+			Status:  "error",
+			Message: "name is empty",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusBadRequest, response)
 		return
 	}
 
-	err = a.repo.Singup(&schema.User{
-		UUID: uuid.New(),
-		Role: role.Buyer,
-		Name: req.Name,
-		Pass: generateHashString(req.Pass), // пароли делаем в хешированном виде и далее будем сравнивать хеши, чтобы их не угнали с базой вместе
+	err = a.repo.Signup(&schema.User{
+		UUID:     uuid.New(),
+		Role:     role.Buyer,
+		Name:     request.Name,
+		Password: generateHashString(request.Password),
 	})
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error creating user entity: " + err.Error(),
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	gCtx.JSON(http.StatusOK, &registerResp{
-		Ok: true,
-	})
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "user entity created successfully",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-func generateHashString(s string) string {
-	h := sha1.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
+func generateHashString(str string) string {
+	hasher := sha1.New()
+	hasher.Write([]byte(str))
+
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (a *Application) logout(ctx *gin.Context) {
-	// получаем заголовок
-	jwtStr := ctx.GetHeader("Authorization")
-	if !strings.HasPrefix(jwtStr, jwtPrefix) { // если нет префикса то нас дурят!
-		gCtx.AbortWithStatus(http.StatusBadRequest) // отдаем что нет доступа
+	jwtStr, cookieErr := ctx.Cookie("kingdoms-token")
+	if cookieErr != nil {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error getting cookie",
+			Body:    nil,
+		}
 
-		return // завершаем обработку
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
 	}
 
-	// отрезаем префикс
+	if !strings.HasPrefix(jwtStr, jwtPrefix) {
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error parsing jwt token: no prefix",
+			Body:    nil,
+		}
+
+		ctx.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
 	jwtStr = jwtStr[len(jwtPrefix):]
 
-	_, err := jwt.ParseWithClaims(jwtStr, &ds.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(jwtStr, &serverModels.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(a.config.JWT.Token), nil
 	})
 	if err != nil {
-		gCtx.AbortWithError(http.StatusBadRequest, err)
-		log.Println(err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error parsing jwt token: error parsing with claims: " + err.Error(),
+			Body:    nil,
+		}
 
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	// сохраняем в блеклист редиса
-	err = a.redis.WriteJWTToBlacklist(gCtx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
+	err = a.redis.WriteJWTToBlacklist(ctx.Request.Context(), jwtStr, a.config.JWT.ExpiresIn)
 	if err != nil {
-		gCtx.AbortWithError(http.StatusInternalServerError, err)
+		response := responseModels.ResponseDefault{
+			Code:    500,
+			Status:  "error",
+			Message: "error saving in redis black list",
+			Body:    nil,
+		}
 
+		ctx.JSON(http.StatusInternalServerError, response)
 		return
 	}
 
-	gCtx.Status(http.StatusOK)
+	response := responseModels.ResponseDefault{
+		Code:    200,
+		Status:  "ok",
+		Message: "user successfully logged out",
+		Body:    nil,
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
-// func (a *Application) loadKingdoms(c *gin.Context) {
-// 	kingdomName := c.Query("kingdom_name")
+func checkUserRights(user schema.User) (bool, responseModels.ResponseDefault) {
+	if user.Role < 2 {
+		response := responseModels.ResponseDefault{
+			Code:    403,
+			Status:  "error",
+			Message: "insufficient rights to complete the request",
+			Body:    nil,
+		}
 
-// 	if kingdomName == "" {
-// 		allKingdoms, err := a.repo.GetAllKingdoms()
+		return false, response
+	}
 
-// 		if err != nil {
-// 			log.Println(err)
-// 			c.Error(err)
-// 		}
-
-// 		c.HTML(http.StatusOK, "index.html", gin.H{
-// 			"kingdoms": allKingdoms,
-// 		})
-// 	} else {
-// 		foundKingdoms, err := a.repo.SearchKingdoms(kingdomName)
-
-// 		if err != nil {
-// 			c.Error(err)
-// 			return
-// 		}
-
-// 		c.HTML(http.StatusOK, "index.html", gin.H{
-// 			"kingdoms":   foundKingdoms,
-// 			"searchText": kingdomName,
-// 		})
-// 	}
-// }
-
-// func (a *Application) loadKingdom(c *gin.Context) {
-// 	kingdomName := c.Param("kingdom_name")
-
-// 	if kingdomName == "favicon.ico" {
-// 		return
-// 	}
-
-// 	kingdom, err := a.repo.GetKingdomByName(kingdomName)
-
-// 	if err != nil {
-// 		c.Error(err)
-// 		return
-// 	}
-
-// 	c.HTML(http.StatusOK, "kingdom.html", gin.H{
-// 		"Name":        kingdom.Name,
-// 		"Image":       kingdom.Image,
-// 		"Description": kingdom.Description,
-// 		"Capital":     kingdom.Capital,
-// 		"Area":        kingdom.Area,
-// 		"State":       kingdom.State,
-// 	})
-// }
-
-// func (a *Application) loadKingdomChangeVisibility(c *gin.Context) {
-// 	kingdomName := c.Param("kingdom_name")
-// 	err := a.repo.ChangeKingdomVisibility(kingdomName)
-
-// 	if err != nil {
-// 		c.Error(err)
-// 	}
-
-// 	c.Redirect(http.StatusFound, "/"+kingdomName)
-// }
+	return true, responseModels.ResponseDefault{}
+}

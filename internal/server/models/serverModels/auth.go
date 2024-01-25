@@ -1,7 +1,7 @@
 package serverModels
 
-type loginRequest struct {
-	Login    string `json:"login"`
+type LoginRequest struct {
+	Name     string `json:"name"`
 	Password string `json:"password"`
 }
 
@@ -11,11 +11,11 @@ type LoginResponce struct {
 	TokenType   string `json:"token_type"`
 }
 
-type registerReq struct {
-	Name string `json:"name"` // лучше назвать то же самое что login
-	Pass string `json:"pass"`
+type RegisterRequest struct {
+	Name     string `json:"name"` // лучше назвать то же самое что login
+	Password string `json:"password"`
 }
 
-type registerResp struct {
-	Ok bool `json:"ok"`
+type RegisterResponce struct {
+	Status bool `json:"status"`
 }

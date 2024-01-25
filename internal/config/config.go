@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -30,6 +31,9 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
+	ExpiresIn     time.Duration
+	SigningMethod jwt.SigningMethod
+	Token         string
 }
 
 const (
@@ -51,8 +55,7 @@ func NewConfig(ctx context.Context) (*Config, error) {
 
 	viper.SetConfigName(configName)
 	viper.SetConfigType("toml")
-	viper.AddConfigPath("config")
-	viper.AddConfigPath(".")
+	viper.AddConfigPath("../../internal/config")
 	viper.WatchConfig()
 
 	err = viper.ReadInConfig()
@@ -66,7 +69,8 @@ func NewConfig(ctx context.Context) (*Config, error) {
 		return nil, err
 	}
 
-	cfg.Redis.Host = os.Getenv(envRedisHost)
+	cfg.Redis.Host = os.Getenv("REDIS_HOST")
+
 	cfg.Redis.Port, err = strconv.Atoi(os.Getenv(envRedisPort))
 	if err != nil {
 		return nil, fmt.Errorf("redis port must be int value: %w", err)
@@ -74,6 +78,10 @@ func NewConfig(ctx context.Context) (*Config, error) {
 
 	cfg.Redis.Password = os.Getenv(envRedisPass)
 	cfg.Redis.User = os.Getenv(envRedisUser)
+
+	cfg.JWT.ExpiresIn = time.Duration(int64(^uint64(0) >> 1))
+	cfg.JWT.SigningMethod = jwt.SigningMethodHS256
+	cfg.JWT.Token = "test"
 
 	log.Info("config parsed")
 

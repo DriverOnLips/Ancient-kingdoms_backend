@@ -9,7 +9,7 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-const servicePrefix = "awesome_service." // наш префикс сервиса
+const servicePrefix = "kingdoms." // наш префикс сервиса
 
 type Client struct {
 	cfg    config.RedisConfig
@@ -22,8 +22,6 @@ func New(ctx context.Context, cfg config.RedisConfig) (*Client, error) {
 	client.cfg = cfg
 
 	redisClient := redis.NewClient(&redis.Options{
-		Password:    cfg.Password,
-		Username:    cfg.User,
 		Addr:        cfg.Host + ":" + strconv.Itoa(cfg.Port),
 		DB:          0,
 		DialTimeout: cfg.DialTimeout,
